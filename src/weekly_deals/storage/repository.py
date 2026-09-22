@@ -121,7 +121,13 @@ class Repository:
 
     # -- model results ----------------------------------------------------
 
-    def record_classification(self, message_id: str, result: ClassificationResult) -> None:
+    def record_classification(
+        self,
+        message_id: str,
+        result: ClassificationResult,
+        *,
+        cache_model: str | None = None,
+    ) -> None:
         record = self.store.read_message(message_id)
         if record is None:
             return
@@ -130,7 +136,9 @@ class Repository:
             CachedCall(
                 body_hash=record.body_hash,
                 provider=result.meta.provider,
-                model=result.meta.model,
+                # An alias such as jev-latest is known before the request;
+                # the resolved version remains in the payload for reporting.
+                model=cache_model or result.meta.model,
                 version=result.meta.prompt_version or "v1",
                 status="failed" if result.failed else "ok",
                 error_code=result.error_code,
@@ -144,7 +152,14 @@ class Repository:
         self, message_id: str, body_hash: str, model: str, prompt_version: str
     ) -> CachedCall | None:
         record = self.store.read_message(message_id)
-        return record.find_classification(body_hash, model, prompt_version) if record else None
+        if record is None:
+            return None
+        found = record.find_classification(body_hash, model, prompt_version)
+        # An old authentication failure must not prevent a retry after the
+        # user fixes their key. Only successful judgments are reusable.
+        if found is not None and found.status == "failed":
+            return None
+        return found
 
     def record_extraction(
         self, message_id: str, body_hash: str, result: ExtractionResult

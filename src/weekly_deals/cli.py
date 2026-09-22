@@ -15,7 +15,7 @@ from typing import Annotated
 import typer
 
 from .clock import SystemClock
-from .config import Settings
+from .config import JEV_ENDPOINT, Secrets, Settings, save_jev_credentials
 from .planning.explanations import explain_all
 from .promotions.render import render_calendar
 from .reporting import render as reporting
@@ -28,7 +28,7 @@ app = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
 )
-auth_app = typer.Typer(help="Mailbox authorisation (read-only).")
+auth_app = typer.Typer(help="Configure JEV or authorise read-only Gmail access.")
 app.add_typer(auth_app, name="auth")
 
 _err = typer.style("error", fg=typer.colors.RED, bold=True)
@@ -62,9 +62,7 @@ def _print_scan(result, language: str) -> None:
     if result.dedup.merged_count:
         typer.echo(f"  merged repeat sightings: {result.dedup.merged_count}")
     if result.dedup.suspected_duplicates:
-        typer.echo(
-            f"  suspected duplicates to review: {len(result.dedup.suspected_duplicates)}"
-        )
+        typer.echo(f"  suspected duplicates to review: {len(result.dedup.suspected_duplicates)}")
     cost = f"${result.cost_usd:.4f}" if result.cost_known else "unknown (provider gave no usage)"
     typer.echo(f"  estimated model cost: {cost}")
 
@@ -114,8 +112,7 @@ def demo(
     for path in written:
         typer.echo(f"  wrote {path}")
     typer.echo(
-        "\nAll merchants and offers in this demo are synthetic. "
-        "No real promotion is represented."
+        "\nAll merchants and offers in this demo are synthetic. No real promotion is represented."
     )
 
 
@@ -137,6 +134,7 @@ def doctor(
     typer.echo(f"jev key set:    {settings.secrets.has_jev()}")
     typer.echo(f"llm configured: {settings.secrets.has_llm()}")
     typer.echo(f"cloud consent:  {settings.app.privacy.cloud_processing_consent}")
+    typer.echo(f"JEV consent:    {settings.secrets.typesafe_email_processing_consent}")
 
     problems = settings.preflight()
     if problems:
@@ -146,17 +144,17 @@ def doctor(
     else:
         typer.echo(f"\n{_ok} configuration is consistent")
 
+    probe_failed = False
     if check_apis:
         typer.echo("\nprobing providers with synthetic input only...")
-        from .mail.fixtures import build_fixtures
-        from .schemas import NormalizedEmail
+        from .schemas import ExtractionStatus, NormalizedEmail
 
         probe = NormalizedEmail(
             source_id="probe",
             subject="Synthetic lunch coupon",
             normalized_text="Take $4 off a lunch purchase of $12 or more. Pickup only.",
         )
-        _ = build_fixtures  # fixtures import kept for the offline path
+        classifier = None
         try:
             from .service import build_classifier
 
@@ -165,26 +163,118 @@ def doctor(
                 typer.echo("  classifier: disabled")
             else:
                 result = classifier.classify(probe)
+                probe_failed |= bool(result.error_code) or result.meta.provider != "typesafe"
                 typer.echo(
                     f"  classifier: {result.meta.provider}/{result.meta.model} -> "
                     f"p={result.contains_promotion if result.contains_promotion is not None else result.contains_food_offer} "
                     f"error={result.error_code}"
                 )
         except Exception as exc:
+            probe_failed = True
             typer.echo(f"  {_err} classifier probe failed: {type(exc).__name__}")
+        finally:
+            if classifier is not None and hasattr(classifier, "close"):
+                classifier.close()
         try:
             from .service import build_extractor
 
             extractor = build_extractor(settings)
             result = extractor.extract(probe)
+            probe_failed |= result.status == ExtractionStatus.FAILED
             typer.echo(
                 f"  extractor: {result.meta.provider}/{result.meta.model} -> "
                 f"status={result.status} offers={len(result.offers)}"
             )
         except Exception as exc:
+            probe_failed = True
             typer.echo(f"  {_err} extractor probe failed: {type(exc).__name__}")
 
-    raise typer.Exit(1 if problems else 0)
+    raise typer.Exit(1 if problems or probe_failed else 0)
+
+
+@auth_app.command("jev")
+def auth_jev(
+    from_env: Annotated[
+        bool, typer.Option(help="Use the existing TYPESAFE_API_KEY instead of a hidden prompt.")
+    ] = False,
+    allow_email_processing: Annotated[
+        bool | None,
+        typer.Option(
+            "--allow-email-processing/--no-email-processing",
+            help="Allow sending scanned email subjects/bodies to TypeSafe for classification.",
+        ),
+    ] = None,
+) -> None:
+    """Verify JEV with synthetic text and save your key privately for all directories."""
+    from .models.jev import JevClassifier
+    from .schemas import NormalizedEmail
+
+    secrets = Secrets()
+    if secrets.jev_endpoint != JEV_ENDPOINT:
+        typer.echo(
+            f"{_err} auth jev only configures the official TypeSafe endpoint. "
+            "Remove the JEV_ENDPOINT override before using this setup command."
+        )
+        raise typer.Exit(2)
+    if from_env:
+        if not secrets.has_jev():
+            typer.echo(
+                f"{_err} no TYPESAFE_API_KEY found; run weekly-deals auth jev interactively."
+            )
+            raise typer.Exit(2)
+        key = secrets.typesafe_api_key.get_secret_value().strip()
+    else:
+        typer.echo("Get your own API key at https://console.typesafe.ai. Input is hidden.")
+        key = typer.prompt("TypeSafe API key", hide_input=True).strip()
+    if not key:
+        typer.echo(f"{_err} an API key is required")
+        raise typer.Exit(2)
+
+    typer.echo("Checking JEV using synthetic coupon text only (no mailbox access)...")
+    with JevClassifier(key, model=secrets.jev_model, timeout=20, max_retries=0) as classifier:
+        result = classifier.classify(
+            NormalizedEmail(
+                source_id="setup-probe",
+                subject="Synthetic clothing coupon",
+                normalized_text="Take 20% off jackets this week. Use code DEMO20.",
+            )
+        )
+    if result.error_code:
+        typer.echo(f"{_err} JEV verification failed: {result.error_code}. No settings saved.")
+        if result.error_code == "auth":
+            typer.echo("TypeSafe rejected the key. Check or replace it in the TypeSafe console.")
+        raise typer.Exit(1)
+    typer.echo(
+        f"{_ok} JEV verified: {result.meta.model} "
+        f"(promotion probability {result.contains_promotion})"
+    )
+
+    if allow_email_processing is None:
+        allow_email_processing = typer.confirm(
+            "Allow future scans to send email subjects/bodies to TypeSafe for JEV "
+            "classification? API usage may be billed",
+            default=False,
+        )
+    path = save_jev_credentials(
+        key, secrets.jev_model, allow_email_processing=allow_email_processing
+    )
+    typer.echo(f"{_ok} saved privately to {path} (mode 0600)")
+    effective = Secrets()
+    if (
+        not effective.has_jev()
+        or effective.typesafe_api_key.get_secret_value().strip() != key
+        or effective.typesafe_email_processing_consent != allow_email_processing
+    ):
+        typer.echo(
+            f"{_warn} a shell variable or the current directory's .env overrides "
+            "the saved settings. Update/remove that override before scanning."
+        )
+        raise typer.Exit(1)
+    typer.echo(f"JEV email processing: {'enabled' if allow_email_processing else 'disabled'}")
+    typer.echo(
+        "Default mode: observe (records judgments, keeps all messages). "
+        "Use host-ingest without --offline to include JEV in agent-host scans."
+    )
 
 
 @auth_app.command("gmail")
@@ -214,12 +304,12 @@ def scan(
     lookback_days: Annotated[int | None, typer.Option(help="Days of history to search.")] = None,
     max_messages: Annotated[int | None, typer.Option(help="Cap messages this run.")] = None,
     mode: Annotated[
-        str,
+        str | None,
         typer.Option(
             help="llm-only | jev-observe | jev-gate | host-ingest "
             "(host-ingest normalizes and stops, leaving extraction to the caller)"
         ),
-    ] = "jev-observe",
+    ] = None,
     mail_dir: Annotated[
         str | None,
         typer.Option(
@@ -231,6 +321,15 @@ def scan(
 ) -> None:
     """Read mail, classify, extract and store offers."""
     overrides: dict = {}
+    if mode is not None and mode not in {"llm-only", "jev-observe", "jev-gate", "host-ingest"}:
+        typer.echo(f"{_err} unknown scan mode: {mode}")
+        raise typer.Exit(2)
+    if mode is not None and mode != "host-ingest":
+        overrides["classification.mode"] = {
+            "llm-only": "off",
+            "jev-observe": "observe",
+            "jev-gate": "gate",
+        }[mode]
     if lookback_days is not None:
         overrides["mail.lookback_days"] = lookback_days
     if mail_dir is not None:
@@ -289,7 +388,9 @@ def list_offers(
     service = _service(config, offline)
     offers = service.list_food_offers()
     if as_json:
-        typer.echo(json.dumps([json.loads(o.model_dump_json()) for o in offers], ensure_ascii=False))
+        typer.echo(
+            json.dumps([json.loads(o.model_dump_json()) for o in offers], ensure_ascii=False)
+        )
         return
     if not offers:
         typer.echo("no offers stored")
@@ -367,7 +468,10 @@ def mark(
     except ValueError as exc:
         typer.echo(f"{_err} {exc}")
         raise typer.Exit(2) from exc
-    typer.echo(f"{_ok} {offer_id}: {state.status}" + (f" on {state.planned_date}" if state.planned_date else ""))
+    typer.echo(
+        f"{_ok} {offer_id}: {state.status}"
+        + (f" on {state.planned_date}" if state.planned_date else "")
+    )
 
 
 @app.command()
@@ -433,7 +537,7 @@ def ingest(
         typer.echo(f"{_err} could not read {file}: {exc}")
         raise typer.Exit(2) from exc
     if not isinstance(payload, dict):
-        typer.echo(f'{_err} expected an object mapping message ids to draft lists')
+        typer.echo(f"{_err} expected an object mapping message ids to draft lists")
         raise typer.Exit(2)
 
     summary = service.ingest_offers(payload)

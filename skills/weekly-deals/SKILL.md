@@ -23,12 +23,17 @@ it.
 
 `blocking_problems` in the output lists anything that must be fixed by the user:
 
-- `cloud_processing_consent is false` — only the user can set this, in their
-  local `config.yaml`. You cannot grant it, and must not look for a flag that
-  bypasses it.
-- Missing `TYPESAFE_API_KEY` / `LLM_API_KEY` — only a self-hosted cloud-model run
-  needs these. Agent-host mode can use the host connector and perform local
-  validation without either key. Never ask for a key in chat.
+- Missing JEV key or email permission — explain the one-time setup command
+  `weekly-deals auth jev`, which the user runs in their terminal. It hides key
+  input, verifies a synthetic request, and asks for JEV email-processing consent.
+  Never ask for a key in chat or write one into this skill. If a key is already
+  configured and the user authorized JEV processing, `auth jev --from-env
+  --allow-email-processing` can migrate it without asking for the key again.
+- Missing `LLM_API_KEY` — agent-host mode does not need a separate extractor key.
+  The agent can extract terms itself.
+- Cloud-processing consent missing — JEV has its own permission from `auth jev`;
+  other cloud extractors require `privacy.cloud_processing_consent` in a file
+  passed with `--config`. Do not grant either without the user's authorization.
 - `per_run_budget_usd` set with no prices configured — the user must set the
   per-token prices for their model, or set the budget to 0.
 - Gmail authorisation expired — tell them to run `weekly-deals auth gmail`.
@@ -51,11 +56,22 @@ Use Mode B only when the user has asked for their real mail to be analysed. It
 is a meaningful disclosure: every message that reaches you passes through your
 context.
 
-**Set `TYPESAFE_API_KEY` if the user has one.** JEV classifies the semantic
-promotion question per message and can label the small category used in the
-calendar. The generic calendar is still indexed before this route, so a
-classifier outage does not make a matched Promotions message disappear.
-`weekly-deals status` reports `jev_configured`.
+**Choose JEV or host-only processing explicitly on first use.** If the user
+asked for JEV and it is not configured, give the terminal setup command above.
+If they choose host-only processing, use `--offline` and state that JEV was not
+used. Do not silently add `--offline` to a requested JEV run. When JEV key and
+permission are already configured, proceed without asking again.
+
+JEV settings are read from the shell, then current-directory `.env`, then the
+private user file `~/.config/weekly-deals/.env` (XDG_CONFIG_HOME is supported).
+`status` reports `jev_configured` and `jev_email_processing_consent`; key presence
+alone is not proof of working authentication. Use `doctor --check-apis` for a
+synthetic live check when configuring or troubleshooting, not on every run.
+Report authentication errors; do not present a mock run as JEV verification.
+
+JEV records promotion probabilities and category judgments per message. The
+calendar is indexed before classification and currently uses local category
+rules, so a classifier outage does not make matched Promotions mail disappear.
 
 ---
 
@@ -88,9 +104,12 @@ will not match.
 weekly-deals scan --mail-dir <dir> --mode host-ingest
 ```
 
-`host-ingest` normalises, runs the classifier, and then stops — extraction is
-yours. Add `--offline` to skip the classifier entirely (no key, no network, and
-you read everything).
+`host-ingest` normalises, runs JEV when configured, and then stops — extraction
+is yours. Add `--offline` only for a chosen host-only run: local mock rules replace
+JEV, no model API is called by the CLI, and you read everything. In your result,
+state whether JEV ran or was bypassed, using the scan's provider and classification
+counts. Already completed, unchanged messages are reused rather than classified
+again; connecting JEV does not retrospectively reprocess the existing mailbox.
 
 The classifier follows `classification.mode` in the user's config:
 
@@ -235,6 +254,6 @@ not undo that in the summary.
 ## Out of scope
 
 Do not attempt, and do not offer to: claim or redeem offers, open promotional
-links, place orders, pay, modify the user's mailbox, widen an OAuth scope, edit
-`privacy.cloud_processing_consent`, install a scheduled task, or obtain the mail
+links, place orders, pay, modify the user's mailbox, widen an OAuth scope,
+install a scheduled task, or obtain the mail
 by a route the user has not agreed to.

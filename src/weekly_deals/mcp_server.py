@@ -172,12 +172,13 @@ def build_server(config: str | None = None, offline: bool = False):
         """
         if mode not in ("llm-only", "jev-observe", "jev-gate"):
             return {"error": "invalid_mode", "allowed": ["llm-only", "jev-observe", "jev-gate"]}
-        if not settings.offline and not settings.app.privacy.cloud_processing_consent:
+        if not settings.offline and not settings.cloud_consent_satisfied():
             return {
                 "error": "consent_required",
                 "message": (
                     "Sending email text to a cloud model has not been consented to. "
-                    "Set privacy.cloud_processing_consent in config.yaml locally. "
+                    "Run weekly-deals auth jev locally for JEV-only consent, or set "
+                    "privacy.cloud_processing_consent in an explicit --config file. "
                     "This cannot be granted through this tool."
                 ),
             }

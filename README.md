@@ -84,6 +84,46 @@ cp -R skills/weekly-deals ~/.claude/skills/
 Start a new turn/session and ask the agent to use `weekly-deals`. If the agent
 already has read access to Gmail, no separate Gmail OAuth setup is needed.
 
+### Connect JEV once (optional)
+
+Skill installation copies instructions; it does not open an API-key form. For
+JEV classification, run this in your own terminal after installing the CLI:
+
+```bash
+weekly-deals auth jev
+```
+
+The command prompts for **your own** [TypeSafe API key](https://console.typesafe.ai)
+with hidden input, verifies it on a synthetic coupon, then asks whether to allow
+email subjects/bodies to be sent to TypeSafe. It saves the key in
+`~/.config/weekly-deals/.env` (or `$XDG_CONFIG_HOME/weekly-deals/.env`) with
+owner-only file permissions. It works from any directory. No changes to
+`SKILL.md`, no key in chat, and no additional Gmail setup are needed in agent-host mode.
+
+Already have `TYPESAFE_API_KEY` in your shell or project `.env`? Use
+`weekly-deals auth jev --from-env` to verify and save it to the same user location.
+An invalid key is not saved. To replace a key or change JEV email permission,
+run the command again. This permission covers only the official TypeSafe API;
+another cloud extractor needs its own configuration and cloud-processing consent.
+
+`weekly-deals status` shows whether a key and permission are configured.
+`weekly-deals doctor --check-apis` checks live connectivity with synthetic text
+and exits with an error if a provider fails. Neither reads your mailbox.
+`jev_configured: true` means a key is present, not that it has just been verified.
+
+After setup, ask the host to use JEV with `weekly-deals`. It uses
+`scan --mail-dir <dir> --mode host-ingest` without `--offline`.
+JEV records promotion probabilities and category judgments; the host extracts
+terms and the application builds the HTML calendar. Default `observe` mode keeps
+all messages; automatic rejection (`gate`) needs a recorded evaluation.
+The calendar's display categories currently come from local rules.
+Already completed, unchanged messages are reused; connecting JEV does not
+retrospectively reprocess those messages. New and pending mail uses the configured
+classifier. Check the scan's classification count, not just its provider label.
+
+Without JEV, explicitly choose the host-only path with `--offline`. The skill
+explains this choice on first use rather than silently bypassing a requested JEV run.
+
 ### Upgrading from MealDeals
 
 Reinstall the application and replace the old `mealdeals` skill folder with
@@ -104,6 +144,7 @@ remain available. No private data is moved automatically.
 weekly-deals demo                   # offline, synthetic, no keys
 weekly-deals doctor                 # check configuration
 weekly-deals doctor --check-apis    # send one synthetic probe per provider
+weekly-deals auth jev               # hidden key entry, verification, private user config
 weekly-deals auth gmail             # read-only OAuth, token stored locally
 
 weekly-deals scan --mail-dir ~/Desktop/test-emails --offline   # real files, no keys
@@ -147,10 +188,12 @@ no key and no network.
    Check the parsed dates, amounts and conditions against the originals before
    going further.
 
-3. `weekly-deals doctor --check-apis` — confirm your keys and model names, using
+3. `weekly-deals auth jev` if using JEV, then `weekly-deals doctor --check-apis` — confirm your keys and model names, using
    synthetic text only. Your mailbox is not touched.
 4. `weekly-deals auth gmail` — read-only authorisation.
-5. Set `privacy.cloud_processing_consent: true` in `config.yaml`. Authorising
+5. For a cloud extractor, set `privacy.cloud_processing_consent: true` in
+   `config.yaml` and pass `--config config.yaml` to scans. JEV-only use can grant
+   its narrower permission through `weekly-deals auth jev`. Authorising
    Gmail reads and agreeing to send email text to a cloud model are two separate
    decisions, and the application will not do the second without this. It covers
    every remote model that sees your mail, JEV included — running the classifier
@@ -178,7 +221,8 @@ at the same time.
 **Agent-host mode (recommended for Codex or Claude Code).** The host already
 has a Gmail connector, so the user authorises the host to read the mailbox and
 asks it to use the Weekly Deals skill. No Google Cloud OAuth client, Gmail token,
-JEV key, or LLM key is required for this path. The host hands Weekly Deals the
+JEV key, or LLM key is required for the host-only (`--offline`) path. JEV can be
+added with `weekly-deals auth jev` as described above. The host hands Weekly Deals the
 messages it fetched, and Weekly Deals performs local normalisation, validation,
 calendar generation, and reporting. The host must preserve the message body and
 must not modify the mailbox.
@@ -202,17 +246,18 @@ cp .env.example .env
 ./.venv/bin/weekly-deals calendar
 ~~~
 
-For a completely local run, set classification.mode: off in config.yaml and
+For local processing, use `--mode llm-only` (or set `classification.mode: "off"`
+in a file passed with `--config`) and
 leave LLM_PROVIDER=mock. This uses Gmail only for reading and does not send
 email text to a cloud model. The mock extractor is deterministic and is mainly
 intended for testing.
 
 ### Is JEV required?
 
-No. JEV is an optional semantic classifier used by self-hosted observe or gate
-runs. Agent-host mode does not need it, and a self-hosted local run can set
-classification.mode: off. If you enable JEV, add TYPESAFE_API_KEY to .env, use
-JEV_MODEL=jev-latest, and explicitly set privacy.cloud_processing_consent: true.
+No. JEV is an optional semantic classifier in both agent-host and self-hosted
+runs. Run `weekly-deals auth jev` to configure it. The default model is
+`jev-latest`, using the [official TypeSafe HTTP API](https://docs.typesafe.ai/api).
+Agent-host scans use `--offline` when JEV is intentionally omitted.
 Subjects and normalised bodies sent to JEV leave the machine; the key is never
 committed to the repository.
 
@@ -248,11 +293,15 @@ pointing it at a synced folder would upload your email text to iCloud.
 
 ## Configuration
 
-Business settings live in `config.yaml` (see `config.example.yaml`). Credentials
-live only in the environment or `.env` (see `.env.example`) and are never
+Business settings are loaded with `--config config.yaml` (see `config.example.yaml`);
+no configuration file is assumed when the flag is omitted. Credentials
+live in private dotenv files or the environment (see `.env.example`) and are never
 written to reports, logs or model prompts.
 
-Precedence: defaults → `config.yaml` → environment → CLI flags.
+Credential precedence, highest first: shell environment → current-directory
+`.env` → user `~/.config/weekly-deals/.env`. Even an empty project key overrides
+the user key; remove unused entries rather than leaving blank placeholders.
+Business settings: defaults → explicit config file → environment → CLI flags.
 
 ## How it works
 

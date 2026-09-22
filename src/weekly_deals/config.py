@@ -3,17 +3,19 @@
 Layering, lowest precedence first: built-in defaults -> ``config.yaml`` ->
 environment / ``.env`` -> explicit CLI flags.
 
-Secrets live only in the environment. They are read through ``SecretStr`` and
+Secrets live in environment variables or private dotenv files. They use ``SecretStr`` and
 never serialised into reports, logs or model prompts.
 """
 
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 from typing import Any, Literal
 
 import yaml
+from dotenv import set_key
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -21,6 +23,36 @@ from .schemas import Channel, Preferences
 
 DEFAULT_JEV_MODEL = "jev-latest"
 JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
+
+
+def user_credentials_path() -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME")
+    root = Path(base).expanduser() if base else Path.home() / ".config"
+    return root / "weekly-deals" / ".env"
+
+
+def save_jev_credentials(api_key: str, model: str, *, allow_email_processing: bool) -> Path:
+    """Save locally after verification, without putting credentials in a skill/repo."""
+    path = user_credentials_path()
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=".env-")
+    staged = Path(temporary)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            if path.exists():
+                stream.write(path.read_text(encoding="utf-8"))
+        for name, value in {
+            "TYPESAFE_API_KEY": api_key,
+            "JEV_MODEL": model,
+            "JEV_ENDPOINT": JEV_ENDPOINT,
+            "TYPESAFE_EMAIL_PROCESSING_CONSENT": str(allow_email_processing).lower(),
+        }.items():
+            set_key(staged, name, value)
+        staged.chmod(0o600)
+        staged.replace(path)
+    finally:
+        staged.unlink(missing_ok=True)
+    return path
 
 
 class MailConfig(BaseModel):
@@ -154,6 +186,8 @@ class Secrets(BaseSettings):
     )
 
     typesafe_api_key: SecretStr | None = None
+    # This permission covers the official TypeSafe endpoint only, never another LLM.
+    typesafe_email_processing_consent: bool = False
     jev_model: str = DEFAULT_JEV_MODEL
     jev_endpoint: str = JEV_ENDPOINT
 
@@ -178,6 +212,12 @@ class Secrets(BaseSettings):
     weekly_deals_language: str | None = Field(
         default=None, validation_alias=AliasChoices("weekly_deals_language", "mealdeals_language")
     )
+
+    def __init__(self, **values: Any) -> None:
+        # Resolve at runtime so XDG_CONFIG_HOME works in any host. Explicit
+        # _env_file=None still disables dotenv loading for callers/tests.
+        values.setdefault("_env_file", (user_credentials_path(), Path(".env")))
+        super().__init__(**values)
 
     @property
     def data_dir(self) -> Path:
@@ -292,6 +332,15 @@ class Settings(BaseModel):
             and self.app.runtime.llm_price_output_usd_per_mtok is not None
         )
 
+    def cloud_consent_satisfied(self) -> bool:
+        if self.app.privacy.cloud_processing_consent:
+            return True
+        return (
+            self.secrets.typesafe_email_processing_consent
+            and self.secrets.jev_endpoint == JEV_ENDPOINT
+            and self.secrets.llm_provider == "mock"
+        )
+
     def preflight(self) -> list[str]:
         """Return blocking problems for the requested mode. Empty means go."""
         problems: list[str] = []
@@ -303,7 +352,10 @@ class Settings(BaseModel):
                 "run an evaluation and record the thresholds first."
             )
         if mode in {"observe", "gate"} and not self.offline and not self.secrets.has_jev():
-            problems.append("TYPESAFE_API_KEY is not set but JEV classification is enabled.")
+            problems.append(
+                "TYPESAFE_API_KEY is not set but JEV classification is enabled. "
+                "Run `weekly-deals auth jev` in your terminal, or choose --offline explicitly."
+            )
         if not self.offline and not self.secrets.has_llm():
             problems.append("LLM_API_KEY / LLM_MODEL are not set for the selected provider.")
         # Reading local .eml files costs nothing and leaks nothing, but sending
@@ -314,11 +366,12 @@ class Settings(BaseModel):
         if (
             self.app.mail.provider != "fixtures"
             and recipients
-            and not self.app.privacy.cloud_processing_consent
+            and not self.cloud_consent_satisfied()
         ):
             problems.append(
                 "privacy.cloud_processing_consent is false: real email text may not be "
-                "sent to " + ", ".join(recipients) + " yet."
+                "sent to " + ", ".join(recipients) + " yet. "
+                "For JEV alone, run `weekly-deals auth jev` and choose email processing."
             )
         if not self.budget_enforceable():
             problems.append(

@@ -33,6 +33,15 @@ from weekly_deals.service import WeeklyDealsService
 REFERENCE = dt.datetime(2026, 9, 16, 9, 0)
 
 
+@pytest.fixture(autouse=True)
+def isolate_user_credentials(monkeypatch, tmp_path):
+    """A developer's saved keys and cloud permission must not affect tests."""
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
+    monkeypatch.setenv("TYPESAFE_API_KEY", "")
+    monkeypatch.setenv("LLM_API_KEY", "")
+    monkeypatch.setenv("TYPESAFE_EMAIL_PROCESSING_CONSENT", "false")
+
+
 @pytest.fixture
 def clock() -> FrozenClock:
     return FrozenClock(REFERENCE, "America/Chicago")

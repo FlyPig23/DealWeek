@@ -318,7 +318,9 @@ class PipelineService:
                     result.meta.cached = True
                 else:
                     result = self.classifier.classify(email)
-                    self.repo.record_classification(row.id, result)
+                    self.repo.record_classification(
+                        row.id, result, cache_model=self.classifier.model_id
+                    )
                 coverage.classified += 1
                 self.repo.record_model_call(run_id, "classify", result.meta)
                 if result.failed:

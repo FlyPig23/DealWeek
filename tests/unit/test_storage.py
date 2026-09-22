@@ -55,6 +55,52 @@ class TestMessages:
         assert repo.get_message("a", "m1").id != repo.get_message("b", "m1").id
 
 
+class TestClassificationCache:
+    def test_model_alias_cache_preserves_the_reported_version(self, repo):
+        from weekly_deals.schemas import ClassificationResult, ProviderMeta
+
+        email = make_email(BODY)
+        row, _ = repo.upsert_message(email)
+        result = ClassificationResult(
+            message_id=email.source_id,
+            body_hash=email.content_hash,
+            contains_promotion=0.98,
+            meta=ProviderMeta(provider="typesafe", model="jev-1.13.0", prompt_version="v1"),
+        )
+        repo.record_classification(row.id, result, cache_model="jev-latest")
+
+        cached = repo.find_classification(row.id, email.content_hash, "jev-latest", "v1")
+        assert cached is not None
+        assert cached.payload["meta"]["model"] == "jev-1.13.0"
+        assert cached.payload["contains_promotion"] == 0.98
+
+    def test_auth_failure_can_be_replaced_by_a_reusable_success(self, repo):
+        from weekly_deals.schemas import ClassificationResult, ProviderMeta
+
+        email = make_email(BODY)
+        row, _ = repo.upsert_message(email)
+        meta = ProviderMeta(provider="jev", model="jev-latest", prompt_version="v1")
+        failed = ClassificationResult(
+            message_id=email.source_id,
+            body_hash=email.content_hash,
+            error_code="auth",
+            meta=meta,
+        )
+        repo.record_classification(row.id, failed)
+
+        assert repo.find_classification(row.id, email.content_hash, "jev-latest", "v1") is None
+        # Keep the failure record for diagnostics, but let a corrected key retry.
+        assert repo.get_message("default", email.source_id).classifications[0].error_code == "auth"
+
+        recovered = failed.model_copy(update={"error_code": None, "contains_promotion": 0.98})
+        repo.record_classification(row.id, recovered)
+        cached = repo.find_classification(row.id, email.content_hash, "jev-latest", "v1")
+        assert cached is not None
+        assert cached.status == "ok"
+        assert cached.payload["contains_promotion"] == 0.98
+        assert len(repo.get_message("default", email.source_id).classifications) == 1
+
+
 class TestUserStateIsolation:
     def test_sync_does_not_reset_user_state(self, clock, preferences, repo):
         """The regression that would silently un-use a used coupon."""

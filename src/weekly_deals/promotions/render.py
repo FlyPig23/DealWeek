@@ -97,11 +97,11 @@ footer { color: var(--muted); font-size: .78rem; margin-top: 34px; padding-top: 
 <body>
 <main>
   <h1>{{ title }}</h1>
-  <p class="subtitle">{{ week_label }} · 数据时点 {{ as_of }} · 共 {{ total }} 条 Promotions 记录</p>
+  <p class="subtitle">{{ week_label }} · 数据时点 {{ as_of }} · {{ ending_soon }} 项优惠在 7 天内到期</p>
   <section class="summary" aria-label="摘要">
-    <div class="metric"><strong>{{ total }}</strong><span>已收录促销</span></div>
-    <div class="metric"><strong>{{ ending_soon }}</strong><span>7 天内到期</span></div>
-    <div class="metric"><strong>{{ active }}</strong><span>目前仍可用</span></div>
+    <div class="metric"><strong>{{ message_total }}</strong><span>原始促销邮件</span></div>
+    <div class="metric"><strong>{{ total }}</strong><span>合并后的优惠活动</span></div>
+    <div class="metric"><strong>{{ merged }}</strong><span>已合并重复提醒</span></div>
     <div class="metric"><strong>{{ needs_review }}</strong><span>需要复核</span></div>
   </section>
   <div class="legend" aria-label="分类图例">
@@ -138,10 +138,13 @@ footer { color: var(--muted); font-size: .78rem; margin-top: 34px; padding-top: 
 _EVENT_CARD = """<div class="event" style="--category: {{ event.color }}">
   <div class="event-title">{{ event.title }}</div>
   <div class="merchant">{{ event.merchant }}</div>
-  <div class="tags"><span class="tag">{{ event.category_label }}</span><span class="tag status">{{ event.status_label }}</span></div>
+  <div class="tags"><span class="tag">{{ event.category_label }}</span><span class="tag status">{{ event.status_label }}</span>{% if event.duplicate_count > 1 %}<span class="tag status">合并 {{ event.duplicate_count }} 封提醒</span>{% endif %}</div>
   {% if event.benefit_hint %}<div class="benefit">{{ event.benefit_hint }}</div>{% endif %}
-  <div class="deadline">{% if event.end_date %}截止 {{ event.end_date }}{% else %}截止日期未识别{% endif %}{% if event.needs_review %} · 需复核{% endif %}</div>
+  <div class="deadline">{% if event.deadline_conflict %}最早来源截止（需核对） {{ event.end_date or '未识别' }} · 原邮件期限不一致{% elif event.end_date %}截止 {{ event.end_date }}{% else %}截止日期未识别{% endif %}{% if event.needs_review %} · 需复核{% endif %}</div>
+  {% if event.dedup_note %}<div class="deadline">{{ event.dedup_note }}</div>{% endif %}
+  {% if event.source_accounts %}<div class="merchant">来源邮箱：{{ event.source_accounts | join('、') }}</div>{% endif %}
   {% if event.evidence %}<details><summary>查看邮件依据</summary><blockquote>{{ event.evidence }}</blockquote></details>{% endif %}
+  {% if event.duplicate_count > 1 %}<details><summary>查看全部 {{ event.duplicate_count }} 封来源</summary>{% for source in event.source_message_ids %}<div class="deadline">{{ source }}</div>{% endfor %}</details>{% endif %}
 </div>"""
 
 _COLORS = {
@@ -159,12 +162,17 @@ def _view(event: PromotionEvent) -> dict:
         "title": event.title,
         "merchant": event.merchant,
         "category_label": _CATEGORY_LABELS[event.category],
-        "status_label": _STATUS_LABELS[event.status],
+        "status_label": "日期待核对" if event.deadline_conflict else _STATUS_LABELS[event.status],
         "color": _COLORS[event.category],
         "benefit_hint": event.benefit_hint,
         "end_date": event.end_date.isoformat() if event.end_date else None,
         "needs_review": event.needs_review,
         "evidence": event.evidence,
+        "source_message_ids": event.source_message_ids or [event.message_id],
+        "source_accounts": event.source_accounts,
+        "duplicate_count": event.duplicate_count,
+        "deadline_conflict": event.deadline_conflict,
+        "dedup_note": event.dedup_note,
     }
 
 
@@ -211,8 +219,9 @@ def render_calendar(
         "week_label": f"{week_start.isoformat()} 至 {week_end.isoformat()}",
         "as_of": now.strftime("%Y-%m-%d %H:%M"),
         "total": len(events),
+        "message_total": sum(event.duplicate_count for event in events),
+        "merged": sum(event.duplicate_count - 1 for event in events),
         "ending_soon": sum(event.status == "ending_soon" for event in events),
-        "active": sum(event.status == "active" for event in events),
         "needs_review": sum(event.needs_review or event.status == "unknown" for event in events),
         "categories": categories,
         "days": days,

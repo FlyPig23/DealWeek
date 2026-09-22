@@ -265,6 +265,13 @@ class JsonStore:
     def read_promotion(self, promotion_id: str) -> dict | None:
         return self.promotions().get(promotion_id)
 
+    def promotion_dedup(self) -> dict:
+        return self._collection("promotion_dedup", {})
+
+    def put_promotion_dedup(self, result: dict) -> None:
+        self._cache["promotion_dedup"] = result
+        self._touch("promotion_dedup")
+
     # -- user state (written through: it can never be recomputed) ----------
 
     def user_states(self) -> dict[str, dict]:

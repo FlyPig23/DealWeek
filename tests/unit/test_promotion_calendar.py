@@ -85,3 +85,33 @@ def test_calendar_html_uses_week_grid_and_category_colors() -> None:
     assert "Noodle Lantern" in html
     assert "Shop" in html
     assert "http://" not in html and "https://" not in html
+
+
+def test_saved_groups_keep_raw_messages_and_use_earliest_conflicting_deadline(service) -> None:
+    from weekly_deals.schemas import PromotionEvent
+
+    versions = {}
+    with service.repository() as repo:
+        for number, day in [(1, 23), (2, 24), (3, 24)]:
+            message = NormalizedEmail(source_id=f"mail-{number}", normalized_text="Same sale")
+            row, _ = repo.upsert_message(message)
+            versions[message.source_id] = row.body_hash
+            repo.upsert_promotion(PromotionEvent(
+                promotion_id=f"promo-{number}", message_id=message.source_id,
+                merchant="Example", title="Same campaign", category="retail",
+                end_date=date(2026, 9, day),
+            ))
+        repo.store.put_promotion_dedup({
+            "source_versions": versions,
+            "groups": [{"representative_id": "promo-2", "member_ids": ["promo-2", "promo-1", "promo-3"]}],
+        })
+    grouped = service.list_promotions()
+    assert len(grouped) == 1
+    assert grouped[0].duplicate_count == 3
+    assert set(grouped[0].source_message_ids) == {"mail-1", "mail-2", "mail-3"}
+    assert grouped[0].deadline_conflict and grouped[0].needs_review
+    assert grouped[0].end_date == date(2026, 9, 23)
+    assert len(service.list_promotions(deduplicated=False)) == 3
+    with service.repository() as repo:
+        repo.upsert_message(NormalizedEmail(source_id="mail-2", normalized_text="Changed sale"))
+    assert len(service.list_promotions()) == 3

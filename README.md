@@ -6,7 +6,9 @@ are named `weekly-deals`; its Python package is `weekly_deals`.
 Turns promotional email into a weekly savings plan you can check: which offers
 are usable this week, which expire soon, and which still need confirmation —
 with the original wording behind every claim. Food, shopping, travel, events,
-and services stay in one calendar with small categories.
+and services stay in one calendar with small categories. An optional JEV pass
+groups repeat reminders for the same promotion into one calendar entry while
+keeping the source emails available.
 
 Local-first, single user, Gmail read-only. Runs offline on synthetic data with
 no API keys at all.
@@ -87,7 +89,8 @@ already has read access to Gmail, no separate Gmail OAuth setup is needed.
 ### Connect JEV once (optional)
 
 Skill installation copies instructions; it does not open an API-key form. For
-JEV classification, run this in your own terminal after installing the CLI:
+JEV classification and promotion deduplication, run this in your own terminal
+after installing the CLI:
 
 ```bash
 weekly-deals auth jev
@@ -113,9 +116,11 @@ and exits with an error if a provider fails. Neither reads your mailbox.
 
 After setup, ask the host to use JEV with `weekly-deals`. It uses
 `scan --mail-dir <dir> --mode host-ingest` without `--offline`.
-JEV records promotion probabilities and category judgments; the host extracts
-terms and the application builds the HTML calendar. Default `observe` mode keeps
-all messages; automatic rejection (`gate`) needs a recorded evaluation.
+JEV records promotion probabilities and category judgments. Run `weekly-deals
+dedupe` after the scan to compare likely repeats, then generate the HTML calendar.
+Both JEV stages reuse the same API key and email-processing permission; no extra
+key is needed. Default `observe` mode keeps all messages; automatic rejection
+(`gate`) needs a recorded evaluation.
 The calendar's display categories currently come from local rules.
 Already completed, unchanged messages are reused; connecting JEV does not
 retrospectively reprocess those messages. New and pending mail uses the configured
@@ -123,6 +128,37 @@ classifier. Check the scan's classification count, not just its provider label.
 
 Without JEV, explicitly choose the host-only path with `--offline`. The skill
 explains this choice on first use rather than silently bypassing a requested JEV run.
+
+### Merge repeated promotions
+
+After fetching email through your agent's Gmail connector:
+
+```bash
+weekly-deals scan --mail-dir <exported-emails> --mode host-ingest
+weekly-deals dedupe
+weekly-deals calendar --output ./savings-calendar.html
+```
+
+`dedupe` asks JEV whether candidate emails describe the same promotion, including
+reminders with different wording. The calendar then shows one entry per matched
+group with its source message IDs. All original emails remain stored; nothing is
+deleted or changed in Gmail. A shared merchant alone is not enough to merge two
+offers. Uncertain matches and failed requests leave the messages separate.
+Likely offers with upcoming deadlines are checked first; messages already scored
+below the promotion-candidate threshold stay in the original-mail view. JEV
+receives readable promotional text rather than email CSS and tracking URLs.
+
+If grouped sources disagree on dates or terms, the entry is marked for review
+and uses the earliest known deadline as a reminder, without treating the most
+generous terms as confirmed. Unknown dates stay unknown. Review the reported
+coverage and cost: deduplication uses the existing `runtime.per_run_budget_usd`
+setting (default $1 per run), and reaching the budget can leave work unfinished.
+Large mailboxes can use `weekly-deals dedupe --max-comparisons 10000` to raise the
+default 5,000-comparison cap while retaining the dollar budget and cached judgments.
+
+To inspect every original entry, use `weekly-deals calendar --all-messages`;
+the same switch works with `--json`. Rendering is offline and free. The `dedupe`
+step calls JEV and is not available as a simulated offline result.
 
 ### Upgrading from MealDeals
 
@@ -151,11 +187,13 @@ weekly-deals scan --mail-dir ~/Desktop/test-emails --offline   # real files, no 
 weekly-deals scan --mode llm-only --max-messages 30
 weekly-deals scan --mode jev-observe --lookback-days 90
 weekly-deals scan --mode jev-gate           # only after an evaluation is recorded
+weekly-deals dedupe                 # JEV: group repeated promotions after a scan
 
 weekly-deals plan                   # show the plan in the terminal
 weekly-deals offers                 # list stored offers and their state
-weekly-deals calendar               # write ./savings-calendar.html
-weekly-deals calendar --json        # print machine-readable events
+weekly-deals calendar               # HTML, with saved duplicate groups merged
+weekly-deals calendar --json        # machine-readable grouped events
+weekly-deals calendar --all-messages # inspect every original Promotions entry
 weekly-deals savings                # same HTML calendar under another command name
 weekly-deals mark <offer-id> --status used
 weekly-deals report --format html --output ./report.html
@@ -229,8 +267,9 @@ must not modify the mailbox.
 
 For example, ask the host:
 
-> Use the Weekly Deals skill to read my last 90 days of Gmail Promotions and
-> generate the weekly savings calendar. Read only; do not send, archive, label,
+> Use the Weekly Deals skill to read my last 30 days of Gmail Promotions, use
+> JEV to classify and deduplicate them, and generate the HTML savings calendar.
+> Read only; do not send, archive, label,
 > or delete anything.
 
 **Self-hosted Gmail API mode.** Use this when Weekly Deals itself should access
@@ -254,8 +293,8 @@ intended for testing.
 
 ### Is JEV required?
 
-No. JEV is an optional semantic classifier in both agent-host and self-hosted
-runs. Run `weekly-deals auth jev` to configure it. The default model is
+No. JEV provides optional semantic classification and promotion deduplication in
+both agent-host and self-hosted runs. Run `weekly-deals auth jev` to configure it. The default model is
 `jev-latest`, using the [official TypeSafe HTTP API](https://docs.typesafe.ai/api).
 Agent-host scans use `--offline` when JEV is intentionally omitted.
 Subjects and normalised bodies sent to JEV leave the machine; the key is never
@@ -319,6 +358,11 @@ Gmail (read-only)  ──►  normalize (MIME/HTML/JSON-LD)
 
 Plain Python controls the sequence. No model decides what happens next, so the
 failure modes are enumerable and the whole thing is testable offline.
+
+The generic Promotions calendar also has a separate post-scan path:
+`scan → dedupe (JEV) → calendar`. It groups repeated campaigns without requiring
+meal-offer extraction. This is separate from the deterministic offer-level
+deduplication shown above; neither stage deletes source email.
 
 `docs/DECISIONS.md` explains the choices people ask about most: why there is no
 LLM framework here, why MCP is used to *expose* this application rather than to

@@ -98,11 +98,9 @@ class RuntimeConfig(BaseModel):
         description="Parallel message fetches. Honoured only when the mail source "
         "declares supports_concurrent_fetch; gmail_api currently does not.",
     )
-    # NOT YET WIRED. Parallelising paid calls means the per-run budget check
-    # races: N requests already in flight can push spend past the cap before any
-    # of them is recorded. Doing this properly needs a semaphore plus an
-    # explicit, documented overshoot allowance, so the settings are reserved
-    # rather than silently ignored.
+    # Model calls during scans remain sequential. Promotion deduplication honors
+    # jev_concurrency and reserves estimated cost before each parallel request.
+    # llm_concurrency remains reserved until extraction has equivalent accounting.
     jev_concurrency: int = Field(default=3, ge=1, le=16)
     llm_concurrency: int = Field(default=2, ge=1, le=16)
     max_retries: int = Field(default=2, ge=0, le=8)

@@ -417,6 +417,11 @@ class PromotionEvent(Strict):
     needs_review: bool = False
     body_complete: bool = True
     has_unparsed_visuals: bool = False
+    source_message_ids: list[str] = Field(default_factory=list)
+    source_accounts: list[str] = Field(default_factory=list)
+    duplicate_count: int = 1
+    deadline_conflict: bool = False
+    dedup_note: str | None = None
 
 
 class MessageRef(Strict):

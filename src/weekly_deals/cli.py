@@ -404,15 +404,44 @@ def list_offers(
         )
 
 
+@app.command("dedupe")
+def dedupe(
+    config: Annotated[str | None, typer.Option()] = None,
+    max_comparisons: Annotated[int, typer.Option(min=1, help="Maximum JEV comparisons in this run.")] = 5000,
+    as_json: Annotated[bool, typer.Option("--json", help="Print run statistics as JSON.")] = False,
+    offline: Annotated[bool, typer.Option()] = False,
+) -> None:
+    """Use JEV to group repeat promotion reminders, keeping every source email."""
+    try:
+        result = _service(config, offline).deduplicate_promotions(max_comparisons=max_comparisons)
+    except ValueError as exc:
+        typer.echo(f"{_err} {exc}", err=True)
+        raise typer.Exit(1) from exc
+    stats = result["stats"]
+    if as_json:
+        typer.echo(json.dumps(stats, ensure_ascii=False, indent=2))
+        return
+    typer.echo(
+        f"{_ok} JEV: {stats['input_count']} emails → {stats['group_count']} calendar entries; "
+        f"{stats['duplicates_removed']} repeat reminders grouped."
+    )
+    typer.echo(f"  API calls: {stats['calls']} | cached judgments: {stats['cache_hits']}")
+    if stats.get("failures") or stats.get("limit_reached"):
+        typer.echo(f"  {_warn} Some comparisons were unresolved; their messages remain separate.")
+    cost = f"${stats['estimated_cost_usd']:.4f}" if stats['cost_known'] else "unknown"
+    typer.echo(f"  estimated JEV cost: {cost}")
+
+
 def _show_savings_calendar(
     *,
     output: str | None,
     as_json: bool,
     config: str | None,
     offline: bool,
+    all_messages: bool = False,
 ) -> None:
     service = _service(config, offline)
-    events = service.list_promotions()
+    events = service.list_promotions(deduplicated=not all_messages)
     if as_json:
         payload = [json.loads(event.model_dump_json()) for event in events]
         rendered = json.dumps(payload, ensure_ascii=False, indent=2)
@@ -434,9 +463,10 @@ def calendar(
     as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output.")] = False,
     config: Annotated[str | None, typer.Option()] = None,
     offline: Annotated[bool, typer.Option()] = False,
+    all_messages: Annotated[bool, typer.Option(help="Show every source email instead of grouped reminders.")] = False,
 ) -> None:
-    """Write every indexed Promotions message as a weekly HTML savings calendar."""
-    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline)
+    """Write the weekly savings calendar, grouping JEV-confirmed duplicate reminders."""
+    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline, all_messages=all_messages)
 
 
 @app.command("savings")
@@ -445,9 +475,10 @@ def savings(
     as_json: Annotated[bool, typer.Option("--json", help="Machine-readable output.")] = False,
     config: Annotated[str | None, typer.Option()] = None,
     offline: Annotated[bool, typer.Option()] = False,
+    all_messages: Annotated[bool, typer.Option(help="Show every source email instead of grouped reminders.")] = False,
 ) -> None:
     """Write the overall savings calendar across promotion categories."""
-    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline)
+    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline, all_messages=all_messages)
 
 
 @app.command("mark")

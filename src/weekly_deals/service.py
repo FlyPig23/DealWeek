@@ -19,7 +19,7 @@ from datetime import UTC
 from pydantic import ValidationError
 
 from .clock import Clock, SystemClock
-from .config import Settings
+from .config import JEV_ENDPOINT, Settings
 from .mail.base import MailSource
 from .mail.fixtures import FixtureMailSource
 from .models.base import OfferExtractor, PromotionClassifier
@@ -209,10 +209,71 @@ class WeeklyDealsService:
             stored = repo.list_offers(include_dismissed=include_dismissed)
         return [temporal.refresh(offer, self.clock) for offer in stored]
 
-    def list_promotions(self) -> list[PromotionEvent]:
-        """Return every indexed Promotions message with current status."""
+    def deduplicate_promotions(self, *, max_comparisons: int = 5000) -> dict:
+        """Judge repeated campaigns with JEV, without changing source messages."""
+        from .models.jev import JevClassifier
+        from .promotions.deduplicate import _identity, deduplicate_promotions
+
+        if self.settings.offline or not self.settings.secrets.has_jev():
+            raise ValueError("JEV deduplication needs a configured key; run `weekly-deals auth jev`.")
+        secrets = self.settings.secrets
+        if not (
+            self.settings.app.privacy.cloud_processing_consent
+            or (secrets.typesafe_email_processing_consent and secrets.jev_endpoint == JEV_ENDPOINT)
+        ):
+            raise ValueError("JEV email-processing consent is missing; run `weekly-deals auth jev`.")
         with self.repository() as repo:
             events = repo.list_promotions()
+            messages = {record.source_id: record for record in repo.store.iter_messages()}
+            previous = repo.store.promotion_dedup()
+        runtime = self.settings.app.runtime
+        assert secrets.typesafe_api_key is not None
+        with JevClassifier(
+            secrets.typesafe_api_key.get_secret_value(), model=secrets.jev_model,
+            endpoint=secrets.jev_endpoint, timeout=runtime.request_timeout_seconds,
+            max_retries=0,
+        ) as classifier:
+            result = deduplicate_promotions(
+                events, messages, classifier, cache=previous.get("cache", []),
+                budget_usd=runtime.per_run_budget_usd, max_comparisons=max_comparisons,
+                workers=runtime.jev_concurrency,
+                as_of=self.clock.now().date(),
+            )
+        result["source_versions"] = {key: record.body_hash for key, record in messages.items()}
+        result["event_identities"] = {
+            event.promotion_id: _identity(event, messages.get(event.message_id)) for event in events
+        }
+        result["created_at"] = self.clock.now().isoformat()
+        with self.repository() as repo:
+            repo.store.put_promotion_dedup(result)
+        return result
+
+    def list_promotions(self, *, deduplicated: bool = True) -> list[PromotionEvent]:
+        """Return the grouped calendar, or every source message on request."""
+        with self.repository() as repo:
+            events = repo.list_promotions()
+            saved = repo.store.promotion_dedup() if deduplicated else {}
+            messages = {record.source_id: record for record in repo.store.iter_messages()} if saved else {}
+        if saved:
+            from .promotions.deduplicate import _identity
+            from .promotions.grouping import group_promotions
+
+            # A changed or newly fetched source stays visible until re-judged.
+            versions = saved.get("source_versions", {})
+            identities = saved.get("event_identities", {})
+            valid = {
+                event.promotion_id for event in events
+                if event.message_id in messages
+                and versions.get(event.message_id) == messages[event.message_id].body_hash
+                and (not identities or identities.get(event.promotion_id)
+                     == _identity(event, messages[event.message_id]))
+            }
+            groups = [{**group, "member_ids": [
+                key for key in group.get("member_ids", []) if key in valid
+            ]} for group in saved.get("groups", []) if group.get("representative_id") in valid]
+            events = group_promotions(events, groups, accounts={
+                key: record.account_alias for key, record in messages.items()
+            })
         return sorted(
             (refresh_promotion_event(event, now=self.clock.now()) for event in events),
             key=lambda event: (

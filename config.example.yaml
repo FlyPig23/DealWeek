@@ -1,0 +1,106 @@
+# MealDeals configuration. Business settings only -- no secrets.
+# Copy to config.yaml and adjust. Secrets go in .env or the environment.
+
+mail:
+  # fixtures | gmail_api | gmail_mcp (not implemented in v0.1)
+  provider: fixtures
+  lookback_days: 90
+  base_query: "category:promotions"
+  # Extra queries widen the scan beyond Promotions. Each one is a deliberate
+  # decision to read more of your mailbox, so the list starts empty.
+  extra_queries: []
+  #  - "from:offers@yourfavouriterestaurant.example"
+  #  - "subject:(coupon OR reward OR BOGO)"
+  include_spam_trash: false
+  max_messages: null
+
+classification:
+  # off     = no classifier; every candidate goes to the extractor
+  # observe = classifier runs, discards nothing, so you can measure it
+  # gate    = classifier may skip confident negatives (requires a record below)
+  mode: observe
+  reject_below: 0.05
+  accept_above: 0.70
+  # Path to the evaluation that authorises gate mode. Without it, gate refuses
+  # to run -- you cannot filter mail on a threshold you have not measured.
+  gate_evaluation_record: null
+
+runtime:
+  # Parallel message fetches. Only takes effect when the mail source declares
+  # itself thread-safe (eml_dir and fixtures do; gmail_api does not yet, because
+  # its client library shares one HTTP connection).
+  mail_concurrency: 3
+  # Reserved, not yet wired. Running paid calls in parallel races the budget
+  # check below: requests already in flight can push spend past the cap before
+  # any of them is recorded.
+  jev_concurrency: 3
+  llm_concurrency: 2
+  max_retries: 2
+  request_timeout_seconds: 60
+  # Model spend stops when this is reached. In-flight requests may push the
+  # real figure slightly over; this is a brake, not a hard cap.
+  #
+  # A cap can only be applied to spend that can be measured, and an LLM call's
+  # cost is only knowable if you say what your model charges. With a cap set and
+  # no prices below, a real run refuses to start rather than pretending to be
+  # capped -- set both prices, or set per_run_budget_usd: 0 to run uncapped.
+  per_run_budget_usd: 1.00
+  # Your account's prices for LLM_MODEL, in USD per million tokens. Check them
+  # against your provider's current pricing page; they are not defaulted,
+  # because a wrong default would silently mis-state what a scan cost you.
+  llm_price_input_usd_per_mtok: null
+  llm_price_output_usd_per_mtok: null
+  # false = a classifier failure parks the message for review.
+  # true  = fall back to the extractor, within budget.
+  automatic_fallback: false
+
+privacy:
+  # Authorising Gmail reads and agreeing to send email text to a cloud model
+  # are two separate decisions. A real scan refuses to start without this.
+  #
+  # It covers every remote model that sees your mail, JEV included -- running
+  # the classifier alone still sends each subject and body to TypeSafe.
+  cloud_processing_consent: false
+  # Stored message text is dropped this many days after the email's own date.
+  # Text still backing a live offer is kept regardless, because the validator's
+  # quotes have to stay checkable. 0 disables pruning.
+  payload_retention_days: 180
+  remote_images: false
+  follow_promotion_links: false
+  telemetry: false
+  redact_personal_identifiers: true
+
+report:
+  language: zh-CN
+  timezone: America/Chicago
+  planning_horizon_days: 14
+  formats: [html, markdown, json]
+
+preferences:
+  timezone: America/Chicago
+  display_language: zh-CN
+  currency: USD
+
+  # These start empty on purpose. With no budget set, MealDeals organises
+  # offers and lists their conditions -- it does not claim to have found the
+  # best plan within a budget it does not know.
+  #
+  # Setting per_meal_budget_minor turns on the rule that matters most: an offer
+  # whose minimum spend is above it is NOT recommended, however large the
+  # discount looks. Amounts are integer minor units -- 1800 is $18.00.
+  per_meal_budget_minor: null
+  # Total spend committed to this week's plan. Offers that would push the week
+  # past it are deferred with BUDGET_EXCEEDED rather than scheduled.
+  weekly_dining_budget_minor: null
+  max_dining_out_per_week: null
+  party_size: null
+
+  preferred_merchants: []
+  excluded_merchants: []
+  # dine_in | pickup | delivery | online | retail
+  allowed_channels: []
+  # Naming a programme here lets offers that require it be confirmed rather
+  # than parked for confirmation.
+  confirmed_memberships: []
+  # Days you already plan to eat out. Offers are matched to these first.
+  planned_meal_slots: []

@@ -1,0 +1,25 @@
+{
+  "version": "jev_promotion_v1",
+  "questions": {
+    "contains_promotion": {
+      "type": "noul",
+      "instructions": "Does this email contain a concrete promotion, discount, reward, free benefit, or limited-time savings opportunity that a recipient could act on? Treat food, shopping, travel, events, services, subscriptions, and other categories equally. Do not count ordinary receipts, account notices, editorial newsletters, or invitations without a concrete benefit as promotions.",
+      "criteria": {
+        "true": "A concrete savings opportunity, discount, reward, free item, credit, or limited-time deal is stated.",
+        "false": "No actionable promotion or savings opportunity is stated."
+      }
+    },
+    "promotion_category": {
+      "type": "choice",
+      "instructions": "Which category best describes the concrete promotion in this email? Choose other when the message is promotional but does not fit the listed categories.",
+      "criteria": {
+        "food": "Restaurants, groceries, meal delivery, drinks, or dining.",
+        "shopping": "Retail goods, clothing, electronics, books, or merchandise.",
+        "travel": "Hotels, flights, transportation, attractions, or travel packages.",
+        "events": "Tickets, concerts, festivals, workshops, or conferences.",
+        "services": "Software, cloud, memberships, classes, or other services.",
+        "other": "A concrete promotion that fits none of the categories above."
+      }
+    }
+  }
+}

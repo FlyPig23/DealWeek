@@ -1,0 +1,90 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mealdeals"
+version = "0.1.0"
+description = "MealDeals: a local-first assistant that turns promotional email into a checkable weekly savings plan"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "MealDeals Authors" }]
+license = { text = "MIT" }
+keywords = ["gmail", "offers", "llm", "local-first"]
+
+# Deliberately small. Every entry here receives either the user's email text or
+# their credentials, so each one is a trust decision, not a convenience.
+#
+# There is no database driver or ORM. One person's promotional mail is a few
+# hundred records that are only ever fetched by key or read whole -- see
+# docs/DECISIONS.md section 5.
+dependencies = [
+    "typer>=0.12.0",
+    "pydantic>=2.7.0",
+    "pydantic-settings>=2.2.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.1",
+    "pyyaml>=6.0.1",
+    "jinja2>=3.1.4",
+    "beautifulsoup4>=4.12.3",
+]
+
+[project.optional-dependencies]
+# Gmail access. Not needed for the offline demo or the test suite.
+gmail = [
+    "google-api-python-client>=2.130.0",
+    "google-auth>=2.29.0",
+    "google-auth-oauthlib>=1.2.0",
+    "keyring>=25.2.0",
+]
+# Cloud extraction. The offline demo runs without it.
+llm = ["openai>=1.30.0"]
+# Local web UI.
+web = ["fastapi>=0.111.0", "uvicorn>=0.30.0"]
+# Expose MealDeals to MCP hosts (see docs/DECISIONS.md).
+# Both SDK majors work: mcp_server._server_class() handles the
+# FastMCP -> MCPServer rename in 2.0.
+mcp = ["mcp>=1.2"]
+all = ["mealdeals[gmail,llm,web,mcp]"]
+dev = [
+    "pytest>=8.2.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+    "mcp>=1.2",
+]
+
+# NOTE: the JEV client is plain httpx against the documented REST contract
+# rather than `typesafe-sdk`. That keeps the retry budget, timeout, cache key
+# and usage accounting under this project's control, and removes one dependency
+# from the path that sees email text.
+
+[project.scripts]
+mealdeals = "mealdeals.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mealdeals"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF"]
+ignore = [
+    "E501",    # line length is handled by the formatter
+    "RUF001",  # CJK punctuation in user-facing strings is intentional
+    "RUF002",
+    "RUF003",
+    "B008",    # Typer uses calls in argument defaults by design
+    "SIM102",  # nested ifs here separate distinct, separately-commented rules
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+filterwarnings = ["error::DeprecationWarning:mealdeals.*"]

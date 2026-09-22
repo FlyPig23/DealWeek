@@ -1,0 +1,41 @@
+# Credentials -- never commit
+.env
+.env.*
+!.env.example
+credentials.json
+client_secret*.json
+token*.json
+.credentials/
+.private/
+
+# Local data and personal exports
+reports/
+# No database any more, but an old install may still have one lying about.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+# The JSON store, if a user points the data directory inside the repo.
+store/
+*.log
+evals/private/
+demo-report.*
+report.*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+
+# uv.lock is deliberately NOT ignored: releases install from a verified lockfile.
+
+# OS
+.DS_Store

@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "WireDate": {
+      "properties": {
+        "raw_expression": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Raw Expression"
+        },
+        "iso_date": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "YYYY-MM-DD, or null if not stated",
+          "title": "Iso Date"
+        },
+        "has_explicit_time": {
+          "default": false,
+          "title": "Has Explicit Time",
+          "type": "boolean"
+        }
+      },
+      "title": "WireDate",
+      "type": "object"
+    },
+    "WireEvidence": {
+      "properties": {
+        "field_path": {
+          "title": "Field Path",
+          "type": "string"
+        },
+        "quote": {
+          "title": "Quote",
+          "type": "string"
+        }
+      },
+      "required": [
+        "field_path",
+        "quote"
+      ],
+      "title": "WireEvidence",
+      "type": "object"
+    },
+    "WireOffer": {
+      "properties": {
+        "merchant": {
+          "title": "Merchant",
+          "type": "string"
+        },
+        "title": {
+          "default": "",
+          "title": "Title",
+          "type": "string"
+        },
+        "food_category": {
+          "default": "other_or_unclear",
+          "title": "Food Category",
+          "type": "string"
+        },
+        "benefit_kind": {
+          "default": "other",
+          "title": "Benefit Kind",
+          "type": "string"
+        },
+        "amount_off_minor": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount Off Minor"
+        },
+        "percent_off": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Percent Off"
+        },
+        "fixed_price_minor": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fixed Price Minor"
+        },
+        "cap_minor": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cap Minor"
+        },
+        "cap_explicitly_absent": {
+          "default": false,
+          "title": "Cap Explicitly Absent",
+          "type": "boolean"
+        },
+        "minimum_spend_minor": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Minimum Spend Minor"
+        },
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        },
+        "promo_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Promo Code"
+        },
+        "free_item_description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Free Item Description"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "valid_from": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WireDate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "valid_until": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WireDate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "claim_deadline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WireDate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "claim_required": {
+          "default": "unknown",
+          "title": "Claim Required",
+          "type": "string"
+        },
+        "weekdays": {
+          "items": {
+            "type": "integer"
+          },
+          "title": "Weekdays",
+          "type": "array"
+        },
+        "new_customer_only": {
+          "default": "unknown",
+          "title": "New Customer Only",
+          "type": "string"
+        },
+        "membership_required": {
+          "default": "unknown",
+          "title": "Membership Required",
+          "type": "string"
+        },
+        "membership_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Membership Name"
+        },
+        "participating_locations_only": {
+          "default": "unknown",
+          "title": "Participating Locations Only",
+          "type": "string"
+        },
+        "location_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Location Note"
+        },
+        "usage_limit": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage Limit"
+        },
+        "stackable": {
+          "default": "unknown",
+          "title": "Stackable",
+          "type": "string"
+        },
+        "channels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "alternative_group": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alternative Group"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/WireEvidence"
+          },
+          "title": "Evidence",
+          "type": "array"
+        },
+        "unresolved_fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Unresolved Fields",
+          "type": "array"
+        },
+        "conflicts": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Conflicts",
+          "type": "array"
+        },
+        "needs_visual_parse": {
+          "default": false,
+          "title": "Needs Visual Parse",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "merchant"
+      ],
+      "title": "WireOffer",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "status": {
+      "default": "success",
+      "title": "Status",
+      "type": "string"
+    },
+    "offers": {
+      "items": {
+        "$ref": "#/$defs/WireOffer"
+      },
+      "title": "Offers",
+      "type": "array"
+    },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    }
+  },
+  "title": "WireExtraction",
+  "type": "object"
+}

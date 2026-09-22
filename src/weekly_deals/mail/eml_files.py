@@ -9,8 +9,9 @@ That matters because the normalizer is the component most likely to break on
 real mail, and it is the one the synthetic corpus tests least convincingly:
 fixtures are written by the same person who wrote the parser.
 
-To produce the files: in Gmail, open a message, the three-dot menu, "Download
-message". In Apple Mail or Outlook, drag the message to a folder.
+Use raw RFC822/MIME from a host mail connector, or export messages as .eml from
+your mail client. Gmail calls this "Download message". Outlook's .msg format is
+not RFC822 and must be exported as MIME/.eml instead, not simply renamed.
 
 Usage::
 
@@ -24,6 +25,7 @@ not send to a provider.
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import quote
 
 from ..schemas import MailCapabilities, MessagePage, MessageRef, NormalizedEmail
 from .base import MailSource, MailSourceError
@@ -52,7 +54,9 @@ class EmlDirectorySource(MailSource):
             raise MailSourceError(
                 f"not a directory: {self.directory}", code="config", retryable=False
             )
-        self.account_alias = account_alias
+        self.account_alias = account_alias.strip()
+        if not self.account_alias:
+            raise MailSourceError("account_alias must not be blank", code="config")
         self.page_size = page_size
         self._files = self._discover(recursive)
         if not self._files:
@@ -69,12 +73,24 @@ class EmlDirectorySource(MailSource):
         for path in sorted(self.directory.glob(pattern)):
             if not path.is_file() or path.name.startswith("."):
                 continue
+            if path.suffix.lower() == ".msg":
+                raise MailSourceError(
+                    "Outlook .msg files are not supported. Export RFC822/MIME .eml "
+                    "or use your agent's mail connector; renaming .msg is not conversion.",
+                    code="unsupported_format",
+                )
             if not any(path.name.lower().endswith(suffix) for suffix in SUFFIXES):
                 continue
             # The path relative to the root is a stable, readable id: re-running
             # a scan on the same folder must hit the same rows, not duplicate
             # them.
-            found[path.relative_to(self.directory).as_posix()] = path
+            source_id = path.relative_to(self.directory).as_posix()
+            # The calendar and host extraction also use source_id. Namespace it
+            # as well as the stored account so two mailboxes can use the same
+            # filenames safely. Preserve IDs for existing unnamed imports.
+            if self.account_alias != "local-eml":
+                source_id = f"{quote(self.account_alias, safe='')}::{source_id}"
+            found[source_id] = path
         return found
 
     def capabilities(self) -> MailCapabilities:
@@ -109,6 +125,12 @@ class EmlDirectorySource(MailSource):
             raise MailSourceError(
                 f"could not read {path.name}", code="io_error", retryable=True
             ) from exc
+        if raw.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+            raise MailSourceError(
+                "This is a binary Outlook/Office file, not RFC822. Export MIME/.eml "
+                "without renaming a .msg file.",
+                code="unsupported_format",
+            )
         return from_rfc822(
             raw,
             source_id=message_id,

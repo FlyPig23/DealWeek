@@ -2,7 +2,7 @@
 
 A mail source reads. It holds no model, makes no judgement about whether an
 email is interesting, and returns the same normalized shape whatever the
-backend is -- Gmail REST, an MCP server, or fixtures.
+backend is -- Gmail REST, exported mail from any provider, or fixtures.
 """
 
 from __future__ import annotations

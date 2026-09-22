@@ -313,8 +313,15 @@ def scan(
     mail_dir: Annotated[
         str | None,
         typer.Option(
-            help="Scan a folder of exported .eml files instead of Gmail. "
-            "No OAuth, no keys; combine with --offline to keep everything local."
+            help="Scan RFC822 .eml files from Gmail, Outlook or another mail source. "
+            "No mail OAuth needed; combine with --offline to skip cloud models."
+        ),
+    ] = None,
+    account_alias: Annotated[
+        str | None,
+        typer.Option(
+            help="Stable account name for .eml imports (e.g. outlook-work). "
+            "Use a distinct name per mailbox to keep message IDs separate."
         ),
     ] = None,
     offline: Annotated[bool, typer.Option(help="Use fixtures and mock models.")] = False,
@@ -335,7 +342,15 @@ def scan(
     if mail_dir is not None:
         overrides["mail.provider"] = "eml_dir"
         overrides["mail.eml_dir"] = mail_dir
+    if account_alias is not None:
+        if not account_alias.strip():
+            typer.echo(f"{_err} --account-alias must not be blank")
+            raise typer.Exit(2)
+        overrides["mail.account_alias"] = account_alias.strip()
     settings = Settings.build(config, offline=offline, overrides=overrides)
+    if account_alias is not None and settings.app.mail.provider != "eml_dir":
+        typer.echo(f"{_err} --account-alias applies to .eml imports; use --mail-dir")
+        raise typer.Exit(2)
 
     if mode == "jev-gate" and not settings.app.classification.gate_evaluation_record:
         typer.echo(
@@ -439,15 +454,32 @@ def _show_savings_calendar(
     config: str | None,
     offline: bool,
     all_messages: bool = False,
+    promotion_candidates: bool = False,
 ) -> None:
+    if all_messages and promotion_candidates:
+        typer.echo(f"{_err} --all-messages and --promotion-candidates cannot be combined", err=True)
+        raise typer.Exit(2)
     service = _service(config, offline)
     events = service.list_promotions(deduplicated=not all_messages)
+    view_notice = ""
+    if promotion_candidates:
+        eligible, stats = service.promotion_candidate_selection()
+        events = [event for event in events if eligible.intersection(
+            event.source_message_ids or [event.message_id]
+        )]
+        view_notice = (
+            f"展示筛选：分类器促销相关性 ≥ {stats['threshold']:.0%}；"
+            f"{stats['candidates']} 封候选邮件，{stats['below_threshold']} 封低于阈值，"
+            f"{stats['unresolved']} 封判断未完成（缺失、失败或正文已变化）。"
+            "全部来源邮件仍保留；空结果不代表邮箱没有优惠，分类结果不代表条款已验证。"
+        )
+        typer.echo(view_notice, err=True)
     if as_json:
         payload = [json.loads(event.model_dump_json()) for event in events]
         rendered = json.dumps(payload, ensure_ascii=False, indent=2)
         default_output = None
     else:
-        rendered = render_calendar(events, now=service.clock.now())
+        rendered = render_calendar(events, now=service.clock.now(), view_notice=view_notice)
         default_output = "./savings-calendar.html"
     target = output or default_output
     if target:
@@ -464,9 +496,11 @@ def calendar(
     config: Annotated[str | None, typer.Option()] = None,
     offline: Annotated[bool, typer.Option()] = False,
     all_messages: Annotated[bool, typer.Option(help="Show every source email instead of grouped reminders.")] = False,
+    promotion_candidates: Annotated[bool, typer.Option(help="Show only candidates from current successful promotion classifications; keep all source emails.")] = False,
 ) -> None:
     """Write the weekly savings calendar, grouping JEV-confirmed duplicate reminders."""
-    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline, all_messages=all_messages)
+    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline,
+                          all_messages=all_messages, promotion_candidates=promotion_candidates)
 
 
 @app.command("savings")
@@ -476,9 +510,11 @@ def savings(
     config: Annotated[str | None, typer.Option()] = None,
     offline: Annotated[bool, typer.Option()] = False,
     all_messages: Annotated[bool, typer.Option(help="Show every source email instead of grouped reminders.")] = False,
+    promotion_candidates: Annotated[bool, typer.Option(help="Show only candidates from current successful promotion classifications; keep all source emails.")] = False,
 ) -> None:
     """Write the overall savings calendar across promotion categories."""
-    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline, all_messages=all_messages)
+    _show_savings_calendar(output=output, as_json=as_json, config=config, offline=offline,
+                          all_messages=all_messages, promotion_candidates=promotion_candidates)
 
 
 @app.command("mark")

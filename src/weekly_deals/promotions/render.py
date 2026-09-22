@@ -98,6 +98,7 @@ footer { color: var(--muted); font-size: .78rem; margin-top: 34px; padding-top: 
 <main>
   <h1>{{ title }}</h1>
   <p class="subtitle">{{ week_label }} · 数据时点 {{ as_of }} · {{ ending_soon }} 项优惠在 7 天内到期</p>
+  {% if view_notice %}<p class="subtitle" role="note">{{ view_notice }}</p>{% endif %}
   <section class="summary" aria-label="摘要">
     <div class="metric"><strong>{{ message_total }}</strong><span>原始促销邮件</span></div>
     <div class="metric"><strong>{{ total }}</strong><span>合并后的优惠活动</span></div>
@@ -181,6 +182,7 @@ def render_calendar(
     *,
     now: datetime,
     title: str = "每周省钱日历",
+    view_notice: str = "",
 ) -> str:
     """Render a self-contained HTML calendar with no remote assets."""
     today = now.date()
@@ -216,6 +218,7 @@ def render_calendar(
     ]
     context = {
         "title": title,
+        "view_notice": view_notice,
         "week_label": f"{week_start.isoformat()} 至 {week_end.isoformat()}",
         "as_of": now.strftime("%Y-%m-%d %H:%M"),
         "total": len(events),

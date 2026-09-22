@@ -2,9 +2,14 @@
 # Copy to config.yaml and adjust. Secrets go in .env or the environment.
 
 mail:
-  # fixtures | gmail_api | gmail_mcp (not implemented in v0.1)
+  # fixtures | eml_dir | gmail_api | gmail_mcp (not implemented in v0.1)
   provider: fixtures
+  # For agent-host Gmail/Outlook/other mail: export RFC822 .eml per account.
+  eml_dir: null
+  # Only for eml_dir. Keep stable between runs; use a different alias per mailbox.
+  account_alias: local-eml
   lookback_days: 90
+  # Gmail API queries only. For eml_dir the entire folder is the scan scope.
   base_query: "category:promotions"
   # Extra queries widen the scan beyond Promotions. Each one is a deliberate
   # decision to read more of your mailbox, so the list starts empty.
@@ -55,7 +60,7 @@ runtime:
   automatic_fallback: false
 
 privacy:
-  # Authorising Gmail reads and agreeing to send email text to a cloud model
+  # Authorising mailbox reads and agreeing to send email text to a cloud model
   # are two separate decisions. A real scan refuses to start without this.
   #
   # It covers every remote model that sees your mail, JEV included -- running

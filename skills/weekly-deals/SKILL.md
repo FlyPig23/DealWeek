@@ -1,6 +1,6 @@
 ---
 name: weekly-deals
-description: Turn promotional email into a weekly savings calendar, using JEV to classify and group repeated promotions when configured. Show deadlines, categories, source emails and terms needing confirmation. Use for promotions, coupons, discounts, shopping offers, travel deals or other savings in the user's inbox, through the agent's mail connector or a Weekly Deals installation.
+description: Turn promotional email into a weekly savings calendar, using JEV to classify and group repeated promotions when configured. Show deadlines, categories, source emails and terms needing confirmation. Use for promotions, coupons, discounts, shopping offers, travel deals or other savings in the user's inbox, through Gmail, Outlook/Microsoft 365 or another connected mail provider, or a Weekly Deals installation.
 ---
 
 # Weekly Deals
@@ -36,7 +36,8 @@ it.
   passed with `--config`. Do not grant either without the user's authorization.
 - `per_run_budget_usd` set with no prices configured — the user must set the
   per-token prices for their model, or set the budget to 0.
-- Gmail authorisation expired — tell them to run `weekly-deals auth gmail`.
+- Mail authorisation expired — for a host connector, reconnect that account in
+  the host. `weekly-deals auth gmail` is only for the direct Gmail API backend.
 
 ---
 
@@ -46,11 +47,12 @@ it.
 `weekly-deals auth gmail` has been run. It fetches, classifies and extracts on its
 own. You only read results. Go to *Reading results*.
 
-**Mode B — you read the mailbox.** The user has no Gmail OAuth client of their
-own, but *you* can reach their mail (a Gmail connector, an MCP mail server). You
-fetch and extract; Weekly Deals normalises, classifies, validates, plans and
-renders. This needs no Google Cloud project from the user and no LLM key,
-because you are the extractor.
+**Mode B — you read the mailbox.** You can reach the user’s mail through an
+authorised Gmail, Outlook/Microsoft 365, or other mail connector. You fetch and
+extract; Weekly Deals normalises, classifies, validates, plans and renders. This
+needs no separate mailbox API credentials or extractor key in Weekly Deals.
+Connector installation, account support and authentication belong to the host.
+The application does not include direct Microsoft Graph/Outlook OAuth.
 
 Use Mode B only when the user has asked for their real mail to be analysed. It
 is a meaningful disclosure: every message that reaches you passes through your
@@ -71,7 +73,7 @@ Report authentication errors; do not present a mock run as JEV verification.
 
 JEV records promotion probabilities and category judgments per message. The
 calendar is indexed before classification and currently uses local category
-rules, so a classifier outage does not make matched Promotions mail disappear.
+rules, so a classifier outage does not make imported mail disappear.
 The post-scan `dedupe` step uses the same JEV key and email permission to group
 repeat promotions. It retains every source email and never modifies the mailbox.
 
@@ -81,30 +83,62 @@ repeat promotions. It retains every source email and never modifies the mailbox.
 
 ### 1. Fetch, and preserve the message exactly
 
-Search the user's mail for promotional messages — their Promotions category,
-plus any senders they name. Ask how far back if they have not said; do not
-assume the whole mailbox.
+Use only read/search tools for accounts the user has authorised. Establish the
+accounts and date window; ask how far back if unspecified. Do not assume all
+accounts or the whole mailbox. Read [the provider handoff guide](references/mail-providers.md)
+before fetching from a new provider.
 
-Write each message into an empty directory as a `.eml` file:
+- **Gmail:** use `category:promotions` within the requested dates, plus any named
+  senders. Search beyond the primary inbox and include archived matching mail.
+- **Outlook / Microsoft 365:** do not send Gmail query syntax. Focused/Other are
+  inbox views, not promotion categories. Use the connector’s date filters to
+  search received mail across Inbox and relevant archive/custom folders,
+  excluding sent, drafts, deleted and junk by default. Let JEV classify this
+  authorised set. A broad scan can include personal/work mail; clarify only if
+  that would widen the user’s existing authorisation. Otherwise preserve the
+  requested sender/folder scope and report its limits. For host-only processing,
+  select promotional messages yourself before import and disclose that selection;
+  the default calendar does not filter out unrelated received mail.
+- **Other providers:** use supported search syntax and the same read-only,
+  date-window and full-body rules. Never invent a Promotions category.
 
-- **Prefer the raw RFC822 source** if your mail tool can return it. Then the
-  MIME walk, the charset decoding, the HTML flattening and the footnotes are all
-  handled by code that is tested for it.
-- If you can only get parsed fields, synthesise a minimal `.eml` with
-  `From:`, `Subject:`, `Date:` and the body — and copy the body **byte for
-  byte**. Do not summarise, translate, reflow or tidy it.
+Follow pagination until the authorised search ends or a stated cap is reached.
+Fetch full bodies, not snippets or Microsoft `bodyPreview`. Record coverage and
+any body-fetch failures separately for each account. If full content is
+unavailable, do not import the snippet. Count it as a full-body fetch failure
+and report incomplete coverage, rather than treating it as no promotion found.
 
-This matters more than it looks. The terms that decide whether an offer is
-usable — the expiry, the claim deadline, the minimum spend, the membership
-requirement — live in the small print at the bottom, and the validator later
-checks quotes against exactly this text. Text you improved is text whose quotes
-will not match.
+Write each account’s messages into its own empty export directory:
+
+- Prefer raw RFC822/MIME source saved as `.eml`.
+- If only parsed fields are available, use Python `email.message.EmailMessage`
+  to preserve From, Subject, Date, Message-ID and the exact decoded body. Set the
+  MIME type to `text/plain` or `text/html` as returned; do not put HTML into a
+  plain-text body or summarise, translate, reflow or tidy it. See the guide for a
+  minimal example. Preserve both body alternatives when available.
+- Use stable filenames based on provider message IDs, with unsafe filename
+  characters encoded consistently. Weekly Deals adds the account alias to the
+  imported source identity. Keep aliases and filenames unchanged on future runs.
+  Outlook `.msg` files are unsupported; renaming is not conversion.
+
+The host must apply the date window before export. `--mail-dir` reads the supplied
+files; its contents are not date-filtered by `--lookback-days`. The terms that
+matter often live in footnotes, and the validator checks quotes against the
+normalised body, so preserve the original content.
 
 ### 2. Let Weekly Deals normalise it
 
 ```bash
-weekly-deals scan --mail-dir <dir> --mode host-ingest
+weekly-deals scan --mail-dir <dir> --account-alias <stable-account-alias> --mode host-ingest
 ```
+
+For multiple accounts, repeat this command with each account’s own directory and
+alias, using the same data directory. Then run `dedupe` once over the combined
+results. Do not mix different accounts under one alias. The same filename may
+exist in two account directories because their aliases distinguish the imports.
+Keep filenames stable across repeated imports. Existing imports under the default
+`local-eml` alias should retain that identity, rather than being imported again
+under a new alias.
 
 `host-ingest` normalises, runs JEV when configured, and then stops — extraction
 is yours. Add `--offline` only for a chosen host-only run: local mock rules replace
@@ -133,6 +167,15 @@ For a JEV savings-calendar request, run after the scan:
 weekly-deals dedupe
 weekly-deals calendar --output <path.html>
 ```
+
+For a broad received-mail scan, render with
+`weekly-deals calendar --promotion-candidates --output <path.html>` so personal
+or work mail is not presented as promotions. This shows only successful current
+saved classifier judgments at the configured candidate threshold (normally JEV;
+mock judgments must never be reported as JEV). Report the view
+counts and any missing/failed judgments; excluded messages remain stored and are
+not verified negatives. Omit that flag to inspect all imports. `--all-messages`
+unfolds duplicate groups and cannot be combined with `--promotion-candidates`.
 
 `dedupe` compares likely repeats with JEV. Repeated reminders for the same
 campaign can share one calendar entry; the same merchant advertising different
@@ -245,8 +288,10 @@ Say this once, plainly, when you present the results. Do not bury it.
 - **Coverage is not exhaustive and cannot be.** You chose which messages to
   hand over; the application did not run the search, so it cannot vouch that
   the window was covered. Runs from this path are always recorded `partial`.
-- **Completeness depends on your fetch.** If your mail tool truncated a body or
-  returned a snippet, terms are missing and nothing downstream can tell.
+- **Completeness depends on your fetch.** Report messages whose full bodies
+  could not be fetched, and do not treat snippets as complete emails. State the
+  accounts/folders searched, messages matched and imported, pagination status,
+  caps and failures; the application cannot reconstruct missing source content.
 - **In `gate` mode, something was filtered.** Say how many. A classifier that
   wrongly rejects a real offer is invisible from the results alone, which is why
   `observe` is the default and why the user should spot-check what it drops.

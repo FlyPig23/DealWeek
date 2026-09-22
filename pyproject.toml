@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Weekly Deals Authors" }]
 license = { text = "MIT" }
-keywords = ["gmail", "offers", "llm", "local-first"]
+keywords = ["gmail", "outlook", "email", "offers", "llm", "local-first"]
 
 # Deliberately small. Every entry here receives either the user's email text or
 # their credentials, so each one is a trust decision, not a convenience.

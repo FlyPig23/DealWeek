@@ -62,6 +62,8 @@ class MailConfig(BaseModel):
     # For provider=eml_dir: a folder of exported .eml files. The rung between
     # the synthetic demo and a live mailbox -- real mail, no credentials.
     eml_dir: str | None = None
+    # Stable identity for one exported mailbox; used only by eml_dir.
+    account_alias: str = Field(default="local-eml", min_length=1)
     lookback_days: int = Field(default=90, ge=1, le=3650)
     base_query: str = "category:promotions"
     extra_queries: list[str] = Field(default_factory=list)

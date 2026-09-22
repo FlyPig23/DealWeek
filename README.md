@@ -10,8 +10,9 @@ and services stay in one calendar with small categories. An optional JEV pass
 groups repeat reminders for the same promotion into one calendar entry while
 keeping the source emails available.
 
-Local-first, single user, Gmail read-only. Runs offline on synthetic data with
-no API keys at all.
+Local-first, single user, read-only email access. Works with Gmail and
+Outlook/Microsoft 365 through your agent’s mail connector, or with exported
+`.eml` files. Runs offline on synthetic data with no API keys at all.
 
 ```bash
 git clone https://github.com/FlyPig23/DealWeek.git
@@ -84,7 +85,10 @@ cp -R skills/weekly-deals ~/.claude/skills/
 ```
 
 Start a new turn/session and ask the agent to use `weekly-deals`. If the agent
-already has read access to Gmail, no separate Gmail OAuth setup is needed.
+already has read access to your Gmail or Outlook/Microsoft 365 account through
+a mail connector, no separate mailbox OAuth setup is needed in Weekly Deals.
+Connector availability and supported account types depend on your agent. See
+[mail connection options](#choose-how-mail-is-connected).
 
 ### Connect JEV once (optional)
 
@@ -101,7 +105,8 @@ with hidden input, verifies it on a synthetic coupon, then asks whether to allow
 email subjects/bodies to be sent to TypeSafe. It saves the key in
 `~/.config/weekly-deals/.env` (or `$XDG_CONFIG_HOME/weekly-deals/.env`) with
 owner-only file permissions. It works from any directory. No changes to
-`SKILL.md`, no key in chat, and no additional Gmail setup are needed in agent-host mode.
+`SKILL.md`, no key in chat, and no additional mailbox API credentials are needed
+in agent-host mode.
 
 Already have `TYPESAFE_API_KEY` in your shell or project `.env`? Use
 `weekly-deals auth jev --from-env` to verify and save it to the same user location.
@@ -131,10 +136,10 @@ explains this choice on first use rather than silently bypassing a requested JEV
 
 ### Merge repeated promotions
 
-After fetching email through your agent's Gmail connector:
+After fetching email through your agent's mail connector:
 
 ```bash
-weekly-deals scan --mail-dir <exported-emails> --mode host-ingest
+weekly-deals scan --mail-dir <exported-emails> --account-alias personal-gmail --mode host-ingest
 weekly-deals dedupe
 weekly-deals calendar --output ./savings-calendar.html
 ```
@@ -142,7 +147,7 @@ weekly-deals calendar --output ./savings-calendar.html
 `dedupe` asks JEV whether candidate emails describe the same promotion, including
 reminders with different wording. The calendar then shows one entry per matched
 group with its source message IDs. All original emails remain stored; nothing is
-deleted or changed in Gmail. A shared merchant alone is not enough to merge two
+deleted or changed in your mailbox. A shared merchant alone is not enough to merge two
 offers. Uncertain matches and failed requests leave the messages separate.
 Likely offers with upcoming deadlines are checked first; messages already scored
 below the promotion-candidate threshold stay in the original-mail view. JEV
@@ -193,7 +198,8 @@ weekly-deals plan                   # show the plan in the terminal
 weekly-deals offers                 # list stored offers and their state
 weekly-deals calendar               # HTML, with saved duplicate groups merged
 weekly-deals calendar --json        # machine-readable grouped events
-weekly-deals calendar --all-messages # inspect every original Promotions entry
+weekly-deals calendar --all-messages # inspect every original email entry
+weekly-deals calendar --promotion-candidates # display successfully classified likely promotions
 weekly-deals savings                # same HTML calendar under another command name
 weekly-deals mark <offer-id> --status used
 weekly-deals report --format html --output ./report.html
@@ -210,8 +216,8 @@ no key and no network.
 
 2. **Test on real email without giving anything away.** Export a dozen
    promotional messages from your mail client (in Gmail: open a message → the
-   three-dot menu → "Download message"; in Apple Mail, drag them to a folder),
-   then:
+   three-dot menu → "Download message"). Use RFC822/MIME `.eml` files, not
+   Outlook `.msg` files; renaming `.msg` to `.eml` does not convert it. Then:
 
    ```bash
    weekly-deals scan --mail-dir ~/Desktop/test-emails --offline
@@ -228,11 +234,13 @@ no key and no network.
 
 3. `weekly-deals auth jev` if using JEV, then `weekly-deals doctor --check-apis` — confirm your keys and model names, using
    synthetic text only. Your mailbox is not touched.
-4. `weekly-deals auth gmail` — read-only authorisation.
+4. Choose a [mail connection](#choose-how-mail-is-connected). For an agent
+   connector, follow its host-ingest example below; steps 5–9 here describe the
+   direct Gmail API path. Only that path needs `weekly-deals auth gmail`.
 5. For a cloud extractor, set `privacy.cloud_processing_consent: true` in
    `config.yaml` and pass `--config config.yaml` to scans. JEV-only use can grant
    its narrower permission through `weekly-deals auth jev`. Authorising
-   Gmail reads and agreeing to send email text to a cloud model are two separate
+   mailbox reads and agreeing to send email text to a cloud model are two separate
    decisions, and the application will not do the second without this. It covers
    every remote model that sees your mail, JEV included — running the classifier
    alone still sends each subject and body to TypeSafe.
@@ -251,26 +259,87 @@ no key and no network.
 9. Only once you have an evaluation record showing acceptable recall, switch to
    `jev-gate`.
 
-## Choose how Gmail is connected
+## Choose how mail is connected
 
-There are two supported paths. Choose one; they do not need to be configured
-at the same time.
+The application accepts standard email files; the host connector handles mailbox
+access. Installing the skill does not install or authorise a mail connector.
 
-**Agent-host mode (recommended for Codex or Claude Code).** The host already
-has a Gmail connector, so the user authorises the host to read the mailbox and
-asks it to use the Weekly Deals skill. No Google Cloud OAuth client, Gmail token,
-JEV key, or LLM key is required for the host-only (`--offline`) path. JEV can be
-added with `weekly-deals auth jev` as described above. The host hands Weekly Deals the
-messages it fetched, and Weekly Deals performs local normalisation, validation,
-calendar generation, and reporting. The host must preserve the message body and
-must not modify the mailbox.
+| Mail source | How it connects | Setup |
+| --- | --- | --- |
+| Gmail | Agent-host connector, or the built-in Gmail API backend | Authorise the host connector, or run `weekly-deals auth gmail` for direct access |
+| Outlook / Microsoft 365 | Agent-host connector that supports your account | Connect the mailbox in Codex, Claude Code, or your chosen host; no Microsoft API credentials go in this skill |
+| Other providers | Host connector with full-message access, or exported RFC822 `.eml` files | Use the connector’s account setup or export the messages yourself |
+
+**Agent-host mode (recommended).** The host reads the authorised mail and hands
+it to Weekly Deals. Local normalisation and calendar rendering work the same way
+for each provider. For the host-only path, no JEV or extractor key is needed;
+choose `--offline` explicitly. Optional JEV classification and deduplication use
+one personal key configured by `weekly-deals auth jev`, regardless of mail provider.
+
+The search step is different:
+
+- **Gmail:** search `category:promotions` within the requested date range, plus
+  any senders the user requests. Include archived matching messages; do not
+  restrict the search to the primary inbox.
+- **Outlook / Microsoft 365:** there is no Gmail `category:promotions` query.
+  Focused/Other are inbox views, not promotion categories. Search received mail
+  within the requested dates across Inbox and relevant archive/custom folders;
+  exclude sent, drafts, deleted and junk mail by default. Use the connector’s
+  supported query/filter syntax, then let JEV classify the authorised set.
+  A broad received-mail scan can include personal or work messages: establish
+  that scope before processing, and ask only if it would widen the user’s
+  existing authorisation. Report any sender or keyword limits. With JEV, use
+  `calendar --promotion-candidates` to show successfully classified likely
+  promotions. The default calendar includes all imports. Without JEV, the host
+  must select promotional messages before import and disclose that selection.
+
+For either provider, follow pagination, fetch full message bodies rather than
+snippets, and report account/folder coverage, caps and missing bodies. Use only
+read tools. See the skill’s [mail handoff guide](skills/weekly-deals/references/mail-providers.md)
+for MIME export details.
 
 For example, ask the host:
 
-> Use the Weekly Deals skill to read my last 30 days of Gmail Promotions, use
-> JEV to classify and deduplicate them, and generate the HTML savings calendar.
-> Read only; do not send, archive, label,
-> or delete anything.
+> Use weekly-deals to scan my Gmail Promotions and received mail in my connected
+> Microsoft 365 account from the last 30 days. Use JEV to find promotions and
+> deduplicate them, then create one HTML savings calendar. Read only; do not send,
+> archive, label, or delete mail.
+
+> 使用 weekly-deals，读取最近 30 天的 Gmail Promotions，以及已连接的 Microsoft 365
+> 邮箱收到的邮件，用 JEV 筛选促销并去重，生成一份 HTML 省钱日历。只读邮件。
+
+For multiple accounts, export each to a separate empty directory. Give each
+account a stable alias and keep filenames based on stable provider message IDs.
+Weekly Deals namespaces imported message IDs by account alias, so the same
+filename in two account directories remains distinct. Scan both into the same
+`WEEKLY_DEALS_DATA_DIR` (the default works), then deduplicate once:
+
+```bash
+# Each directory contains stable <message-id>.eml filenames for that account.
+weekly-deals scan --mail-dir <gmail-export-dir> --account-alias personal-gmail --mode host-ingest
+weekly-deals scan --mail-dir <outlook-export-dir> --account-alias work-outlook --mode host-ingest
+weekly-deals dedupe
+weekly-deals calendar --promotion-candidates --output ./savings-calendar.html
+```
+
+`--promotion-candidates` is a display filter using successful saved classifier
+judgments (normally JEV) at the configured candidate threshold; it does not delete emails or treat missing
+judgments as confirmed negatives. Omit it to inspect every imported message.
+`--all-messages` unfolds saved duplicate groups and cannot be combined with
+`--promotion-candidates`. Mock classifier scores are not JEV judgments.
+
+The host must select the date window before exporting: `--mail-dir` imports the
+files supplied, and `--lookback-days` does not filter that directory. Keep aliases
+and filenames unchanged on repeat imports so already processed mail is reused.
+Existing imports under the default `local-eml` alias should keep that identity;
+do not assign a new alias just because the option is now available.
+The application records host imports as partial coverage because it cannot
+independently verify the host’s mailbox search.
+
+**Direct Microsoft Graph/Outlook OAuth is not built in.** Outlook support uses
+an authorised host connector or `.eml` exports. A connector that cannot read full
+messages is insufficient for complete offer terms. Live access also depends on
+the connector’s account support and any organisation policies.
 
 **Self-hosted Gmail API mode.** Use this when Weekly Deals itself should access
 Gmail from a terminal or server:
@@ -345,7 +414,8 @@ Business settings: defaults → explicit config file → environment → CLI fla
 ## How it works
 
 ```
-Gmail (read-only)  ──►  normalize (MIME/HTML/JSON-LD)
+Host connector / .eml / Gmail API (read-only)
+                  └──► normalize (MIME/HTML/JSON-LD)
                               │
                      JEV classifier  ──► observe | gate routing
                               │
@@ -412,10 +482,11 @@ rather than hidden:
 
 - Offers inside images are flagged `needs_visual`, not parsed. They are counted
   in coverage, never silently dropped.
-- One Gmail account; default scope is 90 days of `category:promotions`, across
-  food, shopping, travel, events, and services. The calendar indexes every
-  matched message; dates it cannot prove remain visible as `unknown` and are
-  marked for review.
+- The direct Gmail API backend uses one account per configuration; its default
+  scope is 90 days of `category:promotions`. Agent-host imports can combine
+  accounts and providers using stable account aliases and distinct filenames.
+  The calendar indexes imported messages across food, shopping, travel, events,
+  and services; dates it cannot prove stay `unknown` and are marked for review.
 - `gmail.readonly` grants read access to the whole mailbox at the OAuth layer.
   The restriction to promotional mail is enforced by this application's queries,
   not by Google.

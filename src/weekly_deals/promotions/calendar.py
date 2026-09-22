@@ -165,6 +165,7 @@ def build_promotion_event(email: NormalizedEmail, *, now: datetime) -> Promotion
     return PromotionEvent(
         promotion_id=email.source_id,
         message_id=email.source_id,
+        source_accounts=[email.account_alias],
         merchant=_merchant(email.sender),
         title=email.subject.strip() or "Untitled promotion",
         category=_category(email),

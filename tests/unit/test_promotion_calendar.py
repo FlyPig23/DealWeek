@@ -115,3 +115,64 @@ def test_saved_groups_keep_raw_messages_and_use_earliest_conflicting_deadline(se
     with service.repository() as repo:
         repo.upsert_message(NormalizedEmail(source_id="mail-2", normalized_text="Changed sale"))
     assert len(service.list_promotions()) == 3
+
+
+def test_candidate_view_preserves_unresolved_mail_and_filters_group_members(
+    service, monkeypatch, tmp_path,
+) -> None:
+    import json
+
+    from typer.testing import CliRunner
+
+    from weekly_deals import cli
+    from weekly_deals.storage.records import CachedCall
+
+    versions = {}
+    with service.repository() as repo:
+        for name in ("candidate", "low", "failed", "stale", "missing", "latest-failed"):
+            email = NormalizedEmail(source_id=name, subject=name, normalized_text=f"Body {name}")
+            record, _ = repo.upsert_message(email)
+            versions[name] = record.body_hash
+            if name != "missing":
+                record.classifications = [CachedCall(
+                    body_hash="old-body" if name == "stale" else record.body_hash,
+                    provider="mock", status="failed" if name == "failed" else "ok",
+                    error_code="unavailable" if name == "failed" else None,
+                    payload={"contains_promotion": 0.2 if name == "low" else 0.95},
+                )]
+                if name == "latest-failed":
+                    record.classifications.append(CachedCall(
+                        body_hash=record.body_hash, status="failed", error_code="unavailable",
+                    ))
+                repo.store.write_message(record)
+            repo.upsert_promotion(build_promotion_event(email, now=service.clock.now()))
+        # A group survives when its eligible source is not the representative.
+        repo.store.put_promotion_dedup({
+            "source_versions": versions,
+            "groups": [{"representative_id": "failed", "member_ids": ["failed", "candidate"]}],
+        })
+
+    eligible, stats = service.promotion_candidate_selection()
+    assert eligible == {"candidate"}
+    assert stats == {"total": 6, "candidates": 1, "below_threshold": 1,
+                     "unresolved": 4, "threshold": 0.7}
+    monkeypatch.setattr(cli, "_service", lambda config, offline: service)
+    runner = CliRunner()
+    selected = runner.invoke(cli.app, ["calendar", "--promotion-candidates", "--json"])
+    assert selected.exit_code == 0, selected.output
+    payload = json.loads(selected.stdout)
+    assert len(payload) == 1
+    assert payload[0]["source_message_ids"] == ["failed", "candidate"]
+    assert "1 封低于阈值" in selected.stderr and "4 封判断未完成" in selected.stderr
+
+    output = tmp_path / "candidates.html"
+    rendered = runner.invoke(cli.app, ["savings", "--promotion-candidates", "--output", str(output)])
+    assert rendered.exit_code == 0, rendered.output
+    html = output.read_text()
+    assert "展示筛选" in html and "空结果不代表邮箱没有优惠" in html
+    assert "4 封判断未完成" in html
+    incompatible = runner.invoke(cli.app, ["calendar", "--all-messages", "--promotion-candidates"])
+    assert incompatible.exit_code == 2
+    assert len(service.list_promotions(deduplicated=False)) == 6
+    with service.repository() as repo:
+        assert len(list(repo.store.iter_messages())) == 6

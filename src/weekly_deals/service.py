@@ -50,7 +50,9 @@ def build_mail_source(settings: Settings, clock: Clock) -> MailSource:
 
         if not settings.app.mail.eml_dir:
             raise ValueError("mail.eml_dir is not set for the eml_dir provider")
-        return EmlDirectorySource(settings.app.mail.eml_dir)
+        return EmlDirectorySource(
+            settings.app.mail.eml_dir, account_alias=settings.app.mail.account_alias
+        )
 
     if provider == "fixtures" or settings.offline:
         return FixtureMailSource(clock)
@@ -283,6 +285,32 @@ class WeeklyDealsService:
             ),
         )
 
+    def promotion_candidate_selection(self) -> tuple[set[str], dict]:
+        """Select a display view from current judgments without changing source records."""
+        threshold = self.settings.app.classification.accept_above
+        eligible: set[str] = set()
+        stats = {"total": 0, "candidates": 0, "below_threshold": 0,
+                 "unresolved": 0, "threshold": threshold}
+        with self.repository() as repo:
+            for record in repo.store.iter_messages():
+                stats["total"] += 1
+                latest = next((call for call in reversed(record.classifications)
+                               if call.body_hash == record.body_hash), None)
+                probability = latest.payload.get("contains_promotion") if latest else None
+                if (
+                    latest is None or latest.status != "ok" or latest.error_code is not None
+                    or latest.payload.get("error_code") is not None
+                    or isinstance(probability, bool) or not isinstance(probability, (int, float))
+                    or not 0 <= probability <= 1
+                ):
+                    stats["unresolved"] += 1
+                elif probability >= threshold:
+                    eligible.add(record.source_id)
+                    stats["candidates"] += 1
+                else:
+                    stats["below_threshold"] += 1
+        return eligible, stats
+
     def get_user_state(self, offer_id: str) -> OfferUserState:
         """Including ``revision``, which a caller needs to use the write guard."""
         with self.repository() as repo:
@@ -389,9 +417,9 @@ class WeeklyDealsService:
 
     # -- host-provided extraction -----------------------------------------
     #
-    # For a host that can already read the user's mailbox -- Claude with a Gmail
-    # connector, say. It reads the mail and does the extraction, so the user
-    # needs neither their own Google Cloud OAuth client nor an LLM key.
+    # For a host that can already read the user's mailbox through a Gmail,
+    # Outlook or other mail connector. It reads and extracts, so the user needs
+    # neither a separate mail OAuth client nor an extractor API key.
     #
     # What does NOT change is that the host's output is not trusted. It goes
     # through the same validator as any model's: every quote must be locatable

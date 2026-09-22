@@ -10,7 +10,9 @@ from __future__ import annotations
 from email.header import Header
 
 import pytest
+from typer.testing import CliRunner
 
+from weekly_deals.cli import app
 from weekly_deals.config import Settings
 from weekly_deals.mail.base import MailSourceError
 from weekly_deals.mail.eml_files import EmlDirectorySource
@@ -93,6 +95,11 @@ class TestDiscovery:
         with pytest.raises(MailSourceError, match=r"no \.eml files"):
             EmlDirectorySource(tmp_path)
 
+    def test_outlook_msg_is_not_silently_ignored_in_a_mixed_export(self, maildir):
+        (maildir / "outlook.msg").write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+        with pytest.raises(MailSourceError, match=r"Outlook \.msg files are not supported"):
+            EmlDirectorySource(maildir)
+
 
 class TestParsing:
     def test_plain_text_offer_is_read(self, maildir):
@@ -114,6 +121,11 @@ class TestParsing:
         email = EmlDirectorySource(maildir).fetch("one.eml")
         assert email.received_date is None
         assert email.date_provenance == "header"
+
+    def test_renaming_an_outlook_msg_does_not_make_it_eml(self, tmp_path):
+        (tmp_path / "renamed.eml").write_bytes(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
+        with pytest.raises(MailSourceError, match="binary Outlook/Office file"):
+            EmlDirectorySource(tmp_path).fetch("renamed.eml")
 
     def test_cjk_subject_survives(self, tmp_path):
         encoded = Header("本周特惠", "utf-8").encode()
@@ -183,3 +195,46 @@ class TestConfigGate:
         )
         settings.app.privacy.cloud_processing_consent = False
         assert not any("consent" in problem for problem in settings.preflight())
+
+
+def test_two_mailbox_imports_keep_same_filename_separate_through_calendar(
+    monkeypatch, tmp_path,
+):
+    """The host can export the same message filename from Gmail and Outlook."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("WEEKLY_DEALS_DATA_DIR", str(tmp_path / "data"))
+    runner = CliRunner()
+    for alias, raw in (("gmail-personal", MESSAGE), ("outlook-work", MULTIPART)):
+        directory = tmp_path / alias
+        directory.mkdir()
+        (directory / "same-id.eml").write_text(raw, encoding="utf-8")
+        args = [
+            "scan", "--mail-dir", str(directory), "--account-alias", alias,
+            "--mode", "host-ingest", "--offline",
+        ]
+        first = runner.invoke(app, args)
+        assert first.exit_code == 0, first.output
+        # Re-importing one account must not add another calendar entry.
+        repeat = runner.invoke(app, args)
+        assert repeat.exit_code == 0, repeat.output
+
+    settings = Settings.build(offline=True)
+    from weekly_deals.clock import SystemClock
+
+    service = WeeklyDealsService(settings, SystemClock(settings.app.report.timezone))
+    with service.repository() as repo:
+        messages = list(repo.store.iter_messages())
+    assert len(messages) == 2
+    assert {record.account_alias for record in messages} == {"gmail-personal", "outlook-work"}
+    assert len({record.source_id for record in messages}) == 2
+    assert any("Maximum discount $5" in record.normalized_text for record in messages)
+
+    events = service.list_promotions()
+    assert len(events) == 2
+    assert {event.source_accounts[0] for event in events} == {"gmail-personal", "outlook-work"}
+    assert {event.message_id for event in events} == {record.source_id for record in messages}
+    output = tmp_path / "calendar.html"
+    rendered = runner.invoke(app, ["calendar", "--offline", "--output", str(output)])
+    assert rendered.exit_code == 0, rendered.output
+    html = output.read_text()
+    assert "gmail-personal" in html and "outlook-work" in html

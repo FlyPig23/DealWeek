@@ -13,15 +13,15 @@ import json
 
 import pytest
 
-from mealdeals.config import Settings
-from mealdeals.mail.normalize import from_rfc822
-from mealdeals.offers import temporal
-from mealdeals.offers.eligibility import resolve
-from mealdeals.offers.validate import stable_offer_id
-from mealdeals.planning import costs
-from mealdeals.planning.explanations import ReasonCode
-from mealdeals.planning.planner import Planner
-from mealdeals.schemas import (
+from weekly_deals.config import Settings
+from weekly_deals.mail.normalize import from_rfc822
+from weekly_deals.offers import temporal
+from weekly_deals.offers.eligibility import resolve
+from weekly_deals.offers.validate import stable_offer_id
+from weekly_deals.planning import costs
+from weekly_deals.planning.explanations import ReasonCode
+from weekly_deals.planning.planner import Planner
+from weekly_deals.schemas import (
     Benefit,
     BenefitKind,
     Channel,
@@ -164,9 +164,9 @@ class TestCoverageTellsTheTruth:
         assert result.status == "completed"
 
     def test_a_cached_rerun_still_counts_its_extractions(self, clock, tmp_path):
-        from mealdeals.service import MealDealsService
+        from weekly_deals.service import WeeklyDealsService
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
         first = svc.sync_promotions(mode="llm-only")
         second = svc.sync_promotions(mode="llm-only")
 
@@ -178,7 +178,7 @@ class TestCoverageTellsTheTruth:
 
 class TestBudgetIsEnforceable:
     def test_a_budget_without_prices_is_refused_up_front(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("MEALDEALS_DATA_DIR", str(tmp_path))
+        monkeypatch.setenv("WEEKLY_DEALS_DATA_DIR", str(tmp_path))
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("LLM_API_KEY", "sk-test")
         monkeypatch.setenv("LLM_MODEL", "some-model")
@@ -188,7 +188,7 @@ class TestBudgetIsEnforceable:
         assert any("per_run_budget_usd" in p for p in settings.preflight())
 
     def test_prices_make_it_enforceable(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("MEALDEALS_DATA_DIR", str(tmp_path))
+        monkeypatch.setenv("WEEKLY_DEALS_DATA_DIR", str(tmp_path))
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         monkeypatch.setenv("LLM_API_KEY", "sk-test")
         monkeypatch.setenv("LLM_MODEL", "some-model")
@@ -199,7 +199,7 @@ class TestBudgetIsEnforceable:
         assert not any("per_run_budget_usd" in p for p in settings.preflight())
 
     def test_no_cap_configured_needs_no_prices(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("MEALDEALS_DATA_DIR", str(tmp_path))
+        monkeypatch.setenv("WEEKLY_DEALS_DATA_DIR", str(tmp_path))
         monkeypatch.setenv("LLM_PROVIDER", "openai")
         settings = Settings.build()
         settings.app.runtime.per_run_budget_usd = 0.0
@@ -209,7 +209,7 @@ class TestBudgetIsEnforceable:
 class TestCloudConsentCoversEveryRecipient:
     def test_jev_alone_still_requires_consent(self, monkeypatch, tmp_path):
         """JEV is sent the subject and body; the LLM being 'mock' is irrelevant."""
-        monkeypatch.setenv("MEALDEALS_DATA_DIR", str(tmp_path))
+        monkeypatch.setenv("WEEKLY_DEALS_DATA_DIR", str(tmp_path))
         monkeypatch.setenv("MAIL_PROVIDER", "gmail_api")
         monkeypatch.setenv("GMAIL_CLIENT_SECRET_PATH", str(tmp_path / "cs.json"))
         monkeypatch.setenv("TYPESAFE_API_KEY", "sk-jev")
@@ -222,7 +222,7 @@ class TestCloudConsentCoversEveryRecipient:
         assert any("cloud_processing_consent" in p for p in settings.preflight())
 
     def test_offline_sends_nothing_anywhere(self, monkeypatch, tmp_path):
-        monkeypatch.setenv("MEALDEALS_DATA_DIR", str(tmp_path))
+        monkeypatch.setenv("WEEKLY_DEALS_DATA_DIR", str(tmp_path))
         monkeypatch.setenv("TYPESAFE_API_KEY", "sk-jev")
         settings = Settings.build(offline=True)
         assert settings.cloud_recipients() == []
@@ -235,12 +235,12 @@ class TestDerivedStateIsRecomputed:
         email = make_email(
             "Take $4 off any lunch bowl. Offer ends September 20, 2026.",
         )
-        from mealdeals.offers.validate import validate
+        from weekly_deals.offers.validate import validate
 
         offer = validate(draft, email, clock, preferences)
         assert offer.time_status is TimeStatus.WITHIN_STATED_WINDOW
 
-        from mealdeals.clock import FrozenClock
+        from weekly_deals.clock import FrozenClock
 
         later = FrozenClock(dt.datetime(2026, 12, 25, 9, 0), "America/Chicago")
         refreshed = temporal.refresh(offer, later)
@@ -248,15 +248,15 @@ class TestDerivedStateIsRecomputed:
         assert refreshed.actionable is False
 
     def test_service_refreshes_on_read(self, tmp_path):
-        from mealdeals.clock import FrozenClock
-        from mealdeals.service import MealDealsService
+        from weekly_deals.clock import FrozenClock
+        from weekly_deals.service import WeeklyDealsService
 
         db = str(tmp_path / "t.db")
         scan_clock = FrozenClock(dt.datetime(2026, 9, 16, 9, 0), "America/Chicago")
-        MealDealsService.offline(clock=scan_clock, store_path=db).sync_promotions(mode="llm-only")
+        WeeklyDealsService.offline(clock=scan_clock, store_path=db).sync_promotions(mode="llm-only")
 
         later = FrozenClock(dt.datetime(2026, 12, 25, 9, 0), "America/Chicago")
-        offers = MealDealsService.offline(clock=later, store_path=db).list_food_offers()
+        offers = WeeklyDealsService.offline(clock=later, store_path=db).list_food_offers()
         stale = [
             o
             for o in offers
@@ -271,10 +271,10 @@ class TestUserStateSurvives:
     def test_a_note_only_patch_keeps_the_used_flag(self, clock, tmp_path):
         from fastapi.testclient import TestClient
 
-        from mealdeals.service import MealDealsService
-        from mealdeals.web.app import create_app
+        from weekly_deals.service import WeeklyDealsService
+        from weekly_deals.web.app import create_app
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
         svc.sync_promotions(mode="llm-only")
         offer_id = svc.list_food_offers()[0].offer_id
         svc.set_user_state(offer_id, status=UserStatus.USED)
@@ -284,7 +284,7 @@ class TestUserStateSurvives:
         response = client.patch(
             f"/api/offers/{offer_id}/user-state",
             json={"note": "checked the terms"},
-            headers={"x-mealdeals-csrf": token},
+            headers={"x-weekly-deals-csrf": token},
         )
         assert response.status_code == 200
         with svc.repository() as repo:
@@ -295,16 +295,16 @@ class TestUserStateSurvives:
     def test_patching_an_unknown_offer_is_rejected(self, clock, tmp_path):
         from fastapi.testclient import TestClient
 
-        from mealdeals.service import MealDealsService
-        from mealdeals.web.app import create_app
+        from weekly_deals.service import WeeklyDealsService
+        from weekly_deals.web.app import create_app
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
         client = TestClient(create_app(svc), base_url="http://127.0.0.1:8765")
         token = client.get("/api/status").json()["csrf_token"]
         response = client.patch(
             "/api/offers/does-not-exist/user-state",
             json={"status": "used"},
-            headers={"x-mealdeals-csrf": token},
+            headers={"x-weekly-deals-csrf": token},
         )
         assert response.status_code == 404
 
@@ -319,7 +319,7 @@ class TestEligibilityOverridesApply:
             ),
         )
         email = make_email("Take $4 off any lunch bowl. Offer ends September 30, 2026.")
-        from mealdeals.offers.validate import validate
+        from weekly_deals.offers.validate import validate
 
         offer = validate(draft, email, clock, preferences)
         planner = Planner(clock, preferences)
@@ -416,7 +416,7 @@ class TestWeeklyBudget:
         preferences = Preferences(
             currency="USD", per_meal_budget_minor=3000, weekly_dining_budget_minor=3500
         )
-        from mealdeals.offers.validate import validate
+        from weekly_deals.offers.validate import validate
 
         offers = []
         for index, merchant in enumerate(("Alpha Grill", "Beta Grill")):
@@ -457,10 +457,10 @@ class TestPlanningNeedsNoProviders:
         refresh a token over the network, or open the OAuth browser flow -- just
         to render a page of stored offers.
         """
-        import mealdeals.service as service_module
-        from mealdeals.service import MealDealsService
+        import weekly_deals.service as service_module
+        from weekly_deals.service import WeeklyDealsService
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "t.db"))
         svc.sync_promotions(mode="llm-only")
 
         def explode(*_args, **_kwargs):
@@ -476,7 +476,7 @@ class TestPlanningNeedsNoProviders:
 
 class TestUnknownDeadline:
     def test_no_stated_deadline_produces_no_phantom_unresolved_field(self, clock, preferences):
-        from mealdeals.offers.validate import validate
+        from weekly_deals.offers.validate import validate
 
         draft = make_draft(ends=None)
         offer = validate(draft, make_email("Take $4 off any lunch bowl."), clock, preferences)
@@ -488,7 +488,7 @@ class TestUnknownDeadline:
 
 @pytest.mark.parametrize("output_format", ["html", "markdown", "json"])
 def test_reports_state_an_incomplete_scan(service, output_format):
-    from mealdeals.reporting.render import coverage_sentence, render
+    from weekly_deals.reporting.render import coverage_sentence, render
 
     result = service.sync_promotions(mode="llm-only", max_messages=2)
     plan = service.build_meal_plan()
@@ -510,7 +510,7 @@ class TestGmailErrorClassification:
         return exc
 
     def test_quota_403_is_retryable_not_an_auth_failure(self):
-        from mealdeals.mail.gmail_api import GmailApiSource
+        from weekly_deals.mail.gmail_api import GmailApiSource
 
         translated = GmailApiSource._translate(
             self._error(403, "Quota exceeded: userRateLimitExceeded")
@@ -519,8 +519,8 @@ class TestGmailErrorClassification:
         assert translated.code == "http_403_quota"
 
     def test_permission_403_still_asks_for_reauthorisation(self):
-        from mealdeals.mail.base import AuthRequired
-        from mealdeals.mail.gmail_api import GmailApiSource
+        from weekly_deals.mail.base import AuthRequired
+        from weekly_deals.mail.gmail_api import GmailApiSource
 
         translated = GmailApiSource._translate(
             self._error(403, "Request had insufficient authentication scopes")
@@ -533,10 +533,10 @@ class TestPaidWorkSurvivesACrash:
     """A scan costs money per message; a late failure must not undo it all."""
 
     def test_extractions_before_a_crash_are_kept_and_reused(self, clock, tmp_path, monkeypatch):
-        import mealdeals.service as service_module
-        from mealdeals.models.base import OfferExtractor
-        from mealdeals.models.mock import MockExtractor
-        from mealdeals.service import MealDealsService
+        import weekly_deals.service as service_module
+        from weekly_deals.models.base import OfferExtractor
+        from weekly_deals.models.mock import MockExtractor
+        from weekly_deals.service import WeeklyDealsService
 
         calls = {"n": 0}
 
@@ -554,12 +554,12 @@ class TestPaidWorkSurvivesACrash:
 
         db = str(tmp_path / "t.db")
         monkeypatch.setattr(service_module, "build_extractor", lambda _s: DiesPartway())
-        crashed = MealDealsService.offline(clock=clock, store_path=db)
+        crashed = WeeklyDealsService.offline(clock=clock, store_path=db)
         with pytest.raises(RuntimeError):
             crashed.sync_promotions(mode="llm-only")
 
         monkeypatch.setattr(service_module, "build_extractor", lambda _s: MockExtractor())
-        recovered = MealDealsService.offline(clock=clock, store_path=db)
+        recovered = WeeklyDealsService.offline(clock=clock, store_path=db)
         with recovered.repository() as repo:
             stored = sum(len(record.extractions) for record in repo.store.iter_messages())
         assert stored == 4, "work completed before the crash was rolled back"
@@ -600,7 +600,7 @@ JVBERi0xLjQK
         assert any("does not read documents" in note for note in email.parse_notes)
 
     def test_an_offer_from_such_an_email_cannot_enter_a_plan(self, clock, preferences):
-        from mealdeals.offers.validate import validate
+        from weekly_deals.offers.validate import validate
 
         email = from_rfc822(self._with_pdf(), source_id="m1")
         offer = validate(make_draft(ends=dt.date(2026, 9, 30)), email, clock, preferences)
@@ -612,7 +612,7 @@ JVBERi0xLjQK
 
 class TestImageOnlyDetection:
     def test_a_single_image_with_no_readable_terms_is_flagged(self):
-        from mealdeals.mail.normalize import html_to_text
+        from weekly_deals.mail.normalize import html_to_text
 
         _, _, image_heavy = html_to_text(
             "<html><body><img src='x.png' alt='Free scoop'></body></html>"
@@ -620,7 +620,7 @@ class TestImageOnlyDetection:
         assert image_heavy is True, "alt text is a hint that an offer exists, not its terms"
 
     def test_a_short_but_readable_promo_is_not_flagged(self):
-        from mealdeals.mail.normalize import html_to_text
+        from weekly_deals.mail.normalize import html_to_text
 
         _, _, image_heavy = html_to_text(
             "<html><body><img src='logo.png' alt='Cafe'>"
@@ -632,9 +632,9 @@ class TestImageOnlyDetection:
 
 class TestRetention:
     def test_stored_text_expires_but_live_evidence_is_kept(self, clock, tmp_path):
-        from mealdeals.service import MealDealsService
+        from weekly_deals.service import WeeklyDealsService
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
         svc.settings.app.privacy.payload_retention_days = 30
         svc.sync_promotions(mode="llm-only")
 
@@ -656,9 +656,9 @@ class TestRetention:
         assert all(r.body_hash for r in pruned)
 
     def test_retention_zero_disables_pruning(self, clock, tmp_path):
-        from mealdeals.service import MealDealsService
+        from weekly_deals.service import WeeklyDealsService
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
         svc.settings.app.privacy.payload_retention_days = 0
         svc.sync_promotions(mode="llm-only")
         with svc.repository() as repo:
@@ -668,8 +668,8 @@ class TestRetention:
 class TestSuspectedDuplicatesPersist:
     def test_pairs_survive_the_run_and_can_be_settled(self, clock, tmp_path):
         """Same merchant, same $4 off, different end dates: not safely mergeable."""
-        from mealdeals.offers.validate import validate
-        from mealdeals.storage.database import open_store, repository_scope
+        from weekly_deals.offers.validate import validate
+        from weekly_deals.storage.database import open_store, repository_scope
 
         offers = []
         for index, end in enumerate((dt.date(2026, 9, 30), dt.date(2026, 10, 15))):
@@ -686,7 +686,7 @@ class TestSuspectedDuplicatesPersist:
             )
         assert offers[0].offer_id != offers[1].offer_id
 
-        from mealdeals.offers.deduplicate import deduplicate
+        from weekly_deals.offers.deduplicate import deduplicate
 
         dedup = deduplicate(offers)
         assert dedup.suspected_duplicates, "a near-match should be reported, not merged"
@@ -708,9 +708,9 @@ class TestSuspectedDuplicatesPersist:
 
     def test_a_scan_persists_the_pairs_it_finds(self, clock, tmp_path):
         """The pipeline must write them, not just count them in its output."""
-        from mealdeals.config import Settings
-        from mealdeals.service import MealDealsService
-        from mealdeals.storage.database import open_store
+        from weekly_deals.config import Settings
+        from weekly_deals.service import WeeklyDealsService
+        from weekly_deals.storage.database import open_store
 
         maildir = tmp_path / "mail"
         maildir.mkdir()
@@ -729,7 +729,7 @@ class TestSuspectedDuplicatesPersist:
             overrides={"mail.provider": "eml_dir", "mail.eml_dir": str(maildir)},
         )
         settings.app.classification.mode = "off"
-        svc = MealDealsService.__new__(MealDealsService)
+        svc = WeeklyDealsService.__new__(WeeklyDealsService)
         svc.settings = settings
         svc.clock = clock
         svc._store = open_store(tmp_path / "store")
@@ -745,10 +745,10 @@ class TestOptimisticConcurrencyIsUsable:
     def test_a_read_returns_the_revision_a_write_needs(self, clock, tmp_path):
         from fastapi.testclient import TestClient
 
-        from mealdeals.service import MealDealsService
-        from mealdeals.web.app import create_app
+        from weekly_deals.service import WeeklyDealsService
+        from weekly_deals.web.app import create_app
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
         svc.sync_promotions(mode="llm-only")
         offer_id = svc.list_food_offers()[0].offer_id
 
@@ -758,7 +758,7 @@ class TestOptimisticConcurrencyIsUsable:
         detail = client.get(f"/api/offers/{offer_id}").json()
         revision = detail["user_state"]["revision"]
 
-        headers = {"x-mealdeals-csrf": token}
+        headers = {"x-weekly-deals-csrf": token}
         first = client.patch(
             f"/api/offers/{offer_id}/user-state",
             json={"status": "saved", "expected_revision": revision},
@@ -778,7 +778,7 @@ class TestOptimisticConcurrencyIsUsable:
 class TestStoreDurability:
     def test_a_torn_write_cannot_be_observed(self, tmp_path):
         """Readers see the old file or the new one, never a partial one."""
-        from mealdeals.storage.store import JsonStore
+        from weekly_deals.storage.store import JsonStore
 
         store = JsonStore(tmp_path / "store")
         store.initialise()
@@ -792,7 +792,7 @@ class TestStoreDurability:
         assert not list(store.root.glob("*.tmp"))
 
     def test_unreadable_json_is_an_error_not_an_empty_store(self, tmp_path):
-        from mealdeals.storage.store import JsonStore
+        from weekly_deals.storage.store import JsonStore
 
         store = JsonStore(tmp_path / "store")
         store.initialise()
@@ -801,17 +801,17 @@ class TestStoreDurability:
             store.offers()
 
     def test_a_newer_schema_is_refused_rather_than_downgraded(self, tmp_path):
-        from mealdeals.storage.store import SCHEMA_VERSION, JsonStore
+        from weekly_deals.storage.store import SCHEMA_VERSION, JsonStore
 
         root = tmp_path / "store"
         root.mkdir(parents=True)
         (root / "meta.json").write_text(json.dumps({"schema_version": SCHEMA_VERSION + 1}))
-        with pytest.raises(RuntimeError, match="newer MealDeals"):
+        with pytest.raises(RuntimeError, match="newer Weekly Deals"):
             JsonStore(root).initialise()
 
     def test_an_older_store_missing_a_field_still_loads(self, tmp_path):
         """What replaces migrations: Pydantic defaults fill the gap."""
-        from mealdeals.storage.records import MessageRecord
+        from weekly_deals.storage.records import MessageRecord
 
         record = MessageRecord.model_validate({"source_id": "m1", "body_hash": "abc"})
         assert record.processing_status == "pending"
@@ -831,13 +831,13 @@ class TestConcurrentUseDoesNotBlock:
         import threading
         import time
 
-        import mealdeals.service as service_module
-        from mealdeals.models.base import OfferExtractor
-        from mealdeals.models.mock import MockExtractor
-        from mealdeals.service import MealDealsService
+        import weekly_deals.service as service_module
+        from weekly_deals.models.base import OfferExtractor
+        from weekly_deals.models.mock import MockExtractor
+        from weekly_deals.service import WeeklyDealsService
 
         store_path = str(tmp_path / "store")
-        seed = MealDealsService.offline(clock=clock, store_path=store_path)
+        seed = WeeklyDealsService.offline(clock=clock, store_path=store_path)
         seed.sync_promotions(mode="llm-only")
         offer_id = seed.list_food_offers()[0].offer_id
 
@@ -854,7 +854,7 @@ class TestConcurrentUseDoesNotBlock:
         original = service_module.build_extractor
         service_module.build_extractor = lambda _s: Slow()
         try:
-            scanner = MealDealsService.offline(clock=clock, store_path=store_path)
+            scanner = WeeklyDealsService.offline(clock=clock, store_path=store_path)
             failures: list[Exception] = []
 
             def run_scan() -> None:
@@ -867,7 +867,7 @@ class TestConcurrentUseDoesNotBlock:
             thread.start()
             time.sleep(0.1)  # let the scan get going
 
-            writer = MealDealsService.offline(clock=clock, store_path=store_path)
+            writer = WeeklyDealsService.offline(clock=clock, store_path=store_path)
             for index in range(4):
                 writer.set_user_state(offer_id, status=UserStatus.USED, note=f"write {index}")
                 time.sleep(0.03)
@@ -876,7 +876,7 @@ class TestConcurrentUseDoesNotBlock:
             service_module.build_extractor = original
 
         assert not failures, f"the scan failed while the user was writing: {failures}"
-        reader = MealDealsService.offline(clock=clock, store_path=store_path)
+        reader = WeeklyDealsService.offline(clock=clock, store_path=store_path)
         with reader.repository() as repo:
             state = repo.get_user_state(offer_id)
         assert state.status is UserStatus.USED
@@ -885,7 +885,7 @@ class TestConcurrentUseDoesNotBlock:
 
 
 class TestHostIngest:
-    """The path a host with its own mailbox access uses (skills/mealdeals).
+    """The path a host with its own mailbox access uses (skills/weekly-deals).
 
     The host is another extractor, not an authority: its output goes through the
     same validator as a paid model's.
@@ -901,9 +901,9 @@ class TestHostIngest:
     )
 
     def _service(self, clock, tmp_path):
-        from mealdeals.config import Settings
-        from mealdeals.service import MealDealsService
-        from mealdeals.storage.database import open_store
+        from weekly_deals.config import Settings
+        from weekly_deals.service import WeeklyDealsService
+        from weekly_deals.storage.database import open_store
 
         maildir = tmp_path / "mail"
         maildir.mkdir()
@@ -914,7 +914,7 @@ class TestHostIngest:
             overrides={"mail.provider": "eml_dir", "mail.eml_dir": str(maildir)},
         )
         settings.app.classification.mode = "off"
-        service = MealDealsService.__new__(MealDealsService)
+        service = WeeklyDealsService.__new__(WeeklyDealsService)
         service.settings = settings
         service.clock = clock
         service._store = open_store(tmp_path / "store")
@@ -1025,10 +1025,10 @@ def test_the_skill_documents_commands_that_exist():
     import pathlib
     import re
 
-    from mealdeals.cli import app
+    from weekly_deals.cli import app
 
-    text = pathlib.Path("skills/mealdeals/SKILL.md").read_text(encoding="utf-8")
-    documented = set(re.findall(r"^mealdeals (\w[\w-]*)", text, re.MULTILINE))
+    text = pathlib.Path("skills/weekly-deals/SKILL.md").read_text(encoding="utf-8")
+    documented = set(re.findall(r"^weekly-deals (\w[\w-]*)", text, re.MULTILINE))
     registered = {command.name or command.callback.__name__ for command in app.registered_commands}
     registered |= {group.name for group in app.registered_groups}
     missing = documented - registered
@@ -1044,9 +1044,9 @@ class TestClassifierFiltersBeforeTheHostSeesAnything:
     """
 
     def _service(self, clock, tmp_path, mode, record=None):
-        from mealdeals.service import MealDealsService
+        from weekly_deals.service import WeeklyDealsService
 
-        svc = MealDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
+        svc = WeeklyDealsService.offline(clock=clock, store_path=str(tmp_path / "store"))
         svc.settings.app.classification.mode = mode
         if record:
             svc.settings.app.classification.gate_evaluation_record = record
@@ -1069,8 +1069,8 @@ class TestClassifierFiltersBeforeTheHostSeesAnything:
 
     def test_a_rerun_does_not_pay_to_classify_unchanged_mail(self, clock, tmp_path):
         """The weekly case: the same 90-day window, mostly unchanged."""
-        import mealdeals.service as service_module
-        from mealdeals.models.mock import MockClassifier
+        import weekly_deals.service as service_module
+        from weekly_deals.models.mock import MockClassifier
 
         calls = {"n": 0}
 
@@ -1094,8 +1094,8 @@ class TestClassifierFiltersBeforeTheHostSeesAnything:
 
     def test_a_contradiction_is_never_discarded(self):
         """Low probability plus a confident food category is uncertainty, not a no."""
-        from mealdeals.models.jev import route_for
-        from mealdeals.schemas import (
+        from weekly_deals.models.jev import route_for
+        from weekly_deals.schemas import (
             ClassificationResult,
             FoodCategory,
             NormalizedEmail,
@@ -1124,8 +1124,8 @@ class TestClassifierFiltersBeforeTheHostSeesAnything:
 
     def test_the_mock_classifier_does_not_contradict_itself(self):
         """Otherwise the offline demo cannot show gating working at all."""
-        from mealdeals.models.mock import MockClassifier
-        from mealdeals.schemas import FoodCategory, NormalizedEmail
+        from weekly_deals.models.mock import MockClassifier
+        from weekly_deals.schemas import FoodCategory, NormalizedEmail
 
         verdict = MockClassifier().classify(
             NormalizedEmail(

@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from mealdeals.planning import costs
-from mealdeals.schemas import Benefit, BenefitKind, Money
+from weekly_deals.planning import costs
+from weekly_deals.schemas import Benefit, BenefitKind, Money
 
 
 def usd(minor: int) -> Money:

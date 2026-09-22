@@ -36,7 +36,7 @@ from ..schemas import (
     Route,
     Usage,
 )
-from .base import FoodClassifier, ModelError
+from .base import ModelError, PromotionClassifier
 
 # Verified at planning time; re-check before release and keep the version tag.
 PRICE_VERSION = "2026-09-19"
@@ -84,7 +84,7 @@ def _valid_probability(value: Any) -> bool:
     )
 
 
-class JevClassifier(FoodClassifier):
+class JevClassifier(PromotionClassifier):
     def __init__(
         self,
         api_key: str,

@@ -1,9 +1,9 @@
 """Local HTTP API and dashboard.
 
-These are MealDeals' own endpoints. They are not Gmail's or TypeSafe's, and none
+These are Weekly Deals' own endpoints. They are not Gmail's or TypeSafe's, and none
 of them proxies a provider request.
 
-Every route reads through :class:`MealDealsService`, so the web UI and the CLI
+Every route reads through :class:`WeeklyDealsService`, so the web UI and the CLI
 cannot disagree about what "this week" means. No route accepts a file path, and
 no response carries a credential.
 """

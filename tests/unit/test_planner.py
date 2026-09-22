@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import datetime as dt
 
-from mealdeals.offers.validate import validate
-from mealdeals.planning.explanations import ReasonCode
-from mealdeals.planning.planner import Planner
-from mealdeals.schemas import (
+from weekly_deals.offers.validate import validate
+from weekly_deals.planning.explanations import ReasonCode
+from weekly_deals.planning.planner import Planner
+from weekly_deals.schemas import (
     Eligibility,
     OfferUserState,
     Preferences,

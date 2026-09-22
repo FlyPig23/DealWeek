@@ -244,7 +244,7 @@ def render_rfc822(fixture: Fixture, clock: Clock) -> bytes:
         "MIME-Version: 1.0",
     ]
     if fixture.html is not None and fixture.plain is not None:
-        boundary = "----mealdeals-fixture"
+        boundary = "----weekly_deals-fixture"
         headers.append(f'Content-Type: multipart/alternative; boundary="{boundary}"')
         body = (
             f"--{boundary}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n"

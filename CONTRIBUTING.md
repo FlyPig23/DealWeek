@@ -1,6 +1,6 @@
 # Contributing
 
-MealDeals is a local-first project. Contributions should keep mailbox access,
+Weekly Deals is a local-first project. Contributions should keep mailbox access,
 model calls, and user decisions separate.
 
 ## Local setup
@@ -24,7 +24,7 @@ regression case.
 
 ## Skill and mailbox changes
 
-The packaged skill is `skills/mealdeals/SKILL.md`. Keep its two mailbox modes
+The packaged skill is `skills/weekly-deals/SKILL.md`. Keep its two mailbox modes
 explicit: an agent host may read Gmail through its connector, while a
 self-hosted install uses the read-only Gmail API scope. Neither mode may send,
 archive, label, delete, or open promotional links.

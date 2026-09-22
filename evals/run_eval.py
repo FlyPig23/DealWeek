@@ -34,9 +34,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from mealdeals.models.jev import route_for
-from mealdeals.models.mock import MockClassifier
-from mealdeals.schemas import NormalizedEmail, Route
+from weekly_deals.models.jev import route_for
+from weekly_deals.models.mock import MockClassifier
+from weekly_deals.schemas import NormalizedEmail, Route
 
 KEYWORDS = (
     "off", "free", "coupon", "bogo", "discount", "deal", "reward", "save",
@@ -247,7 +247,7 @@ def main() -> int:
 
     classifier = MockClassifier()
     if os.environ.get("TYPESAFE_API_KEY"):
-        from mealdeals.models.jev import JevClassifier, load_questions
+        from weekly_deals.models.jev import JevClassifier, load_questions
 
         classifier = JevClassifier(
             os.environ["TYPESAFE_API_KEY"],

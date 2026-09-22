@@ -36,7 +36,7 @@ from ..schemas import (
     TriState,
     Usage,
 )
-from .base import FoodClassifier, OfferExtractor
+from .base import OfferExtractor, PromotionClassifier
 
 _AMOUNT_OFF = re.compile(r"\$\s?(\d+(?:\.\d{2})?)\s*off", re.IGNORECASE)
 _AMOUNT_OFF_ALT = re.compile(r"save\s+\$\s?(\d+(?:\.\d{2})?)", re.IGNORECASE)
@@ -130,7 +130,7 @@ def _evidence(field_path: str, message_id: str, quote: str) -> Evidence:
     return Evidence(field_path=field_path, message_id=message_id, quote=quote.strip())
 
 
-class MockClassifier(FoodClassifier):
+class MockClassifier(PromotionClassifier):
     """Keyword triage with the same output shape as the JEV adapter."""
 
     prompt_version = "mock-classifier-v1"

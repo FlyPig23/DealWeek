@@ -13,11 +13,11 @@ import secrets
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from ..service import MealDealsService
+from ..service import WeeklyDealsService
 
 ALLOWED_HOSTS = {"127.0.0.1", "localhost", "[::1]", "::1"}
-SESSION_COOKIE = "mealdeals_session"
-CSRF_HEADER = "x-mealdeals-csrf"
+SESSION_COOKIE = "weekly_deals_session"
+CSRF_HEADER = "x-weekly-deals-csrf"
 SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
 
 
@@ -30,9 +30,9 @@ def _host_allowed(host_header: str | None) -> bool:
     return host in ALLOWED_HOSTS
 
 
-def create_app(service: MealDealsService) -> FastAPI:
+def create_app(service: WeeklyDealsService) -> FastAPI:
     app = FastAPI(
-        title="MealDeals",
+        title="Weekly Deals",
         docs_url=None,  # no interactive docs on a local app
         redoc_url=None,
         openapi_url=None,

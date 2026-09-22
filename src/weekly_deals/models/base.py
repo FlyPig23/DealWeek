@@ -2,7 +2,7 @@
 
 Two roles, kept apart:
 
-``FoodClassifier``  cheap triage -- does this email plausibly contain a food offer?
+``PromotionClassifier``  cheap triage -- does this email plausibly contain a promotion?
 ``OfferExtractor``  expensive structuring -- what exactly does it offer?
 
 Neither receives credentials, tools, network access or a shell. They take text
@@ -37,7 +37,7 @@ class BudgetExceeded(ModelError):
         self.limit = limit
 
 
-class FoodClassifier(ABC):
+class PromotionClassifier(ABC):
     @abstractmethod
     def classify(self, email: NormalizedEmail) -> ClassificationResult:
         """Route one email. Must return a result even on failure, with error_code set."""

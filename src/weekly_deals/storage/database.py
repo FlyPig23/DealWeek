@@ -2,7 +2,7 @@
 
 Kept as its own module so callers say "open the store" rather than knowing where
 the files live. There is no engine, no connection pool and no session: see
-:mod:`mealdeals.storage.store` for why a database was the wrong shape for this
+:mod:`weekly_deals.storage.store` for why a database was the wrong shape for this
 data.
 
 ``:memory:`` is accepted for tests and the offline demo. It maps to a temporary
@@ -28,7 +28,7 @@ IN_MEMORY = ":memory:"
 def open_store(path: Path | str) -> JsonStore:
     """Open (creating if needed) the store at ``path``."""
     if str(path) == IN_MEMORY:
-        temporary = tempfile.mkdtemp(prefix="mealdeals-ephemeral-")
+        temporary = tempfile.mkdtemp(prefix="weekly_deals-ephemeral-")
         atexit.register(shutil.rmtree, temporary, ignore_errors=True)
         store = JsonStore(temporary)
     else:

@@ -11,8 +11,8 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from mealdeals.models.jev import JevClassifier, route_for
-from mealdeals.schemas import FoodCategory, Route
+from weekly_deals.models.jev import JevClassifier, route_for
+from weekly_deals.schemas import FoodCategory, Route
 
 from ..conftest import make_email
 
@@ -164,7 +164,7 @@ class TestFailures:
         assert len(attempts) == 1
 
     def test_server_error_retries_then_reports(self, monkeypatch):
-        monkeypatch.setattr("mealdeals.models.jev.time.sleep", lambda _: None)
+        monkeypatch.setattr("weekly_deals.models.jev.time.sleep", lambda _: None)
         attempts: list[int] = []
 
         def handler(request: httpx.Request) -> httpx.Response:
@@ -178,7 +178,7 @@ class TestFailures:
 
     def test_rate_limit_respects_retry_after(self, monkeypatch):
         slept: list[float] = []
-        monkeypatch.setattr("mealdeals.models.jev.time.sleep", lambda s: slept.append(s))
+        monkeypatch.setattr("weekly_deals.models.jev.time.sleep", lambda s: slept.append(s))
         state = {"n": 0}
 
         def handler(request: httpx.Request) -> httpx.Response:

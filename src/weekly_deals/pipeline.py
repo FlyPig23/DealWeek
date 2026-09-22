@@ -29,7 +29,7 @@ from datetime import UTC, datetime, timedelta
 from .clock import Clock
 from .config import Settings
 from .mail.base import MailSource, MailSourceError
-from .models.base import FoodClassifier, OfferExtractor
+from .models.base import OfferExtractor, PromotionClassifier
 from .models.jev import route_for
 from .offers import validate as validation
 from .offers.deduplicate import DedupResult, deduplicate
@@ -49,7 +49,7 @@ from .schemas import (
 )
 from .storage.repository import Repository
 
-logger = logging.getLogger("mealdeals.pipeline")
+logger = logging.getLogger("weekly_deals.pipeline")
 
 
 @dataclass
@@ -84,7 +84,7 @@ class PipelineService:
         repository: Repository,
         mail_source: MailSource,
         extractor: OfferExtractor,
-        classifier: FoodClassifier | None = None,
+        classifier: PromotionClassifier | None = None,
     ) -> None:
         self.settings = settings
         self.clock = clock
@@ -145,7 +145,7 @@ class PipelineService:
         # Work in windows rather than submitting everything: a 90-day scan can
         # be thousands of messages and they must not all sit in memory at once.
         window = workers * 4
-        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mealdeals-fetch") as pool:
+        with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="weekly_deals-fetch") as pool:
             for start in range(0, len(refs), window):
                 batch = refs[start : start + window]
                 futures = [pool.submit(self.mail.fetch, ref.source_id) for ref in batch]
@@ -342,7 +342,7 @@ class PipelineService:
             # A host that reads the mailbox does the extraction too, so this
             # mode stops here -- after normalising and after routing. Only
             # messages the classifier let through are left `pending`, which is
-            # what `mealdeals pending` hands over.
+            # what `weekly-deals pending` hands over.
             if mode == "host-ingest":
                 self.repo.mark_message_status(row.id, "pending")
                 continue

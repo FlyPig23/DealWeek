@@ -5,7 +5,7 @@ personal state, and the two never collide. ``upsert_offer`` deliberately has no
 path that can reach the user-state file.
 
 This interface is the seam the rest of the application is written against. It
-sits on :mod:`mealdeals.storage.store`, a directory of JSON files: a message id
+sits on :mod:`weekly_deals.storage.store`, a directory of JSON files: a message id
 here is the account plus the mailbox's own identifier, not an autoincrementing
 row number, because there is no table to allocate one from and carrying the
 provider's id through is one fewer mapping to get wrong.

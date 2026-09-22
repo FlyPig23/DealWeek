@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import datetime as dt
 
-from mealdeals.offers import validate
-from mealdeals.schemas import (
+from weekly_deals.offers import validate
+from weekly_deals.schemas import (
     Benefit,
     BenefitKind,
     Eligibility,
@@ -148,7 +148,7 @@ class TestEligibilityIntegration:
         assert not offer.actionable
 
     def test_confirmed_membership_clears_it(self, clock):
-        from mealdeals.schemas import Preferences
+        from weekly_deals.schemas import Preferences
 
         draft = make_draft(
             ends=dt.date(2026, 9, 30),

@@ -1,4 +1,4 @@
-# MealDeals configuration. Business settings only -- no secrets.
+# Weekly Deals configuration. Business settings only -- no secrets.
 # Copy to config.yaml and adjust. Secrets go in .env or the environment.
 
 mail:
@@ -81,7 +81,7 @@ preferences:
   display_language: zh-CN
   currency: USD
 
-  # These start empty on purpose. With no budget set, MealDeals organises
+  # These start empty on purpose. With no budget set, Weekly Deals organises
   # offers and lists their conditions -- it does not claim to have found the
   # best plan within a budget it does not know.
   #

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import pytest
 
-from mealdeals.mail.base import MailSource, MailSourceError
-from mealdeals.schemas import (
+from weekly_deals.mail.base import MailSource, MailSourceError
+from weekly_deals.schemas import (
     MailCapabilities,
     TimeStatus,
     UserStatus,
 )
-from mealdeals.service import MealDealsService
+from weekly_deals.service import WeeklyDealsService
 
 
 class TestFixtureRun:
@@ -70,21 +70,21 @@ class TestFixtureRun:
 
 class TestIdempotency:
     def test_second_run_does_not_duplicate_offers(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         first = service.sync_promotions(mode="llm-only")
         second = service.sync_promotions(mode="llm-only")
         assert first.coverage.offers_after_dedup == second.coverage.offers_after_dedup
         assert len(service.list_food_offers()) == first.coverage.offers_after_dedup
 
     def test_second_run_reuses_the_cached_extraction(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.sync_promotions(mode="llm-only")
         second = service.sync_promotions(mode="llm-only")
         # Nothing changed, so no message needed a fresh extraction call.
         assert second.coverage.extraction_attempts == 0
 
     def test_user_state_survives_a_rescan(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.sync_promotions(mode="llm-only")
         target = service.list_food_offers()[0]
         service.set_user_state(target.offer_id, status=UserStatus.USED)
@@ -96,7 +96,7 @@ class TestIdempotency:
 
     def test_time_status_refreshes_without_a_new_model_call(self, clock):
         """A cached run must still recompute expiry against the new date."""
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.sync_promotions(mode="llm-only")
         before = {o.offer_id: o.time_status for o in service.list_food_offers()}
 
@@ -114,20 +114,20 @@ class TestIdempotency:
 
 class TestClassifierRouting:
     def test_observe_mode_extracts_everything(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.classification.mode = "observe"
         result = service.sync_promotions(mode="jev-observe")
         assert result.stages.rejected == []
         assert result.coverage.classified > 0
 
     def test_gate_mode_requires_a_recorded_evaluation(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.classification.mode = "gate"
         with pytest.raises(RuntimeError, match="gate evaluation"):
             service.sync_promotions(mode="jev-gate")
 
     def test_gate_mode_with_an_evaluation_record_may_filter(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.classification.mode = "gate"
         service.settings.app.classification.gate_evaluation_record = "evals/record-v1.json"
         result = service.sync_promotions(mode="jev-gate")
@@ -146,7 +146,7 @@ class TestFailureHandling:
             def fetch(self, message_id):  # pragma: no cover - never reached
                 raise AssertionError
 
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         with service.repository() as repo:
             pipeline = service._pipeline(repo)
             pipeline.mail = BrokenSource()
@@ -172,7 +172,7 @@ class TestFailureHandling:
                     raise MailSourceError("boom", code="http_500", retryable=True)
                 return self.inner.fetch(message_id)
 
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         with service.repository() as repo:
             pipeline = service._pipeline(repo)
             pipeline.mail = FlakySource(mail)
@@ -183,7 +183,7 @@ class TestFailureHandling:
         assert result.coverage.is_partial
 
     def test_budget_exhaustion_parks_work_and_keeps_what_was_gathered(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         # A tiny budget with a priced classifier would stop after the first call;
         # the mock reports $0, so instead assert the accounting path is wired.
         result = service.sync_promotions(mode="llm-only")
@@ -201,7 +201,7 @@ class TestMaxMessages:
 class TestReportRendering:
     @pytest.mark.parametrize("fmt", ["html", "markdown", "json"])
     def test_every_format_renders(self, service, fmt):
-        from mealdeals.reporting import render as reporting
+        from weekly_deals.reporting import render as reporting
 
         service.sync_promotions(mode="llm-only")
         output = reporting.render(
@@ -210,7 +210,7 @@ class TestReportRendering:
         assert output.strip()
 
     def test_html_escapes_email_content_and_loads_nothing_remote(self, service):
-        from mealdeals.reporting import render as reporting
+        from weekly_deals.reporting import render as reporting
 
         service.sync_promotions(mode="llm-only")
         html = reporting.render(
@@ -221,7 +221,7 @@ class TestReportRendering:
         assert "no-referrer" in html
 
     def test_report_always_states_its_coverage(self, service):
-        from mealdeals.reporting import render as reporting
+        from weekly_deals.reporting import render as reporting
 
         service.sync_promotions(mode="llm-only")
         markdown = reporting.render(
@@ -240,7 +240,7 @@ class TestConcurrentFetch:
     """
 
     def _pipeline(self, clock, source):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.runtime.mail_concurrency = 4
         with service.repository() as repo:
             pipeline = service._pipeline(repo)
@@ -248,7 +248,7 @@ class TestConcurrentFetch:
             yield pipeline
 
     def test_order_is_preserved_under_concurrency(self, clock, mail):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.runtime.mail_concurrency = 4
         assert mail.capabilities().supports_concurrent_fetch
 
@@ -261,7 +261,7 @@ class TestConcurrentFetch:
 
     def test_each_body_stays_with_its_own_id(self, clock, mail):
         """The interleaving bug would show up here and nowhere else."""
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.runtime.mail_concurrency = 4
         refs = list(mail.iter_all("q"))
         with service.repository() as repo:
@@ -290,7 +290,7 @@ class TestConcurrentFetch:
                 return self.inner.fetch(message_id)
 
         source = SerialOnly(mail)
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.runtime.mail_concurrency = 8
         refs = list(mail.iter_all("q"))
         with service.repository() as repo:
@@ -315,7 +315,7 @@ class TestConcurrentFetch:
                     raise MailSourceError("boom", code="http_500")
                 return self.inner.fetch(message_id)
 
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.runtime.mail_concurrency = 4
         with service.repository() as repo:
             pipeline = service._pipeline(repo)
@@ -342,7 +342,7 @@ class TestConcurrentFetch:
                     raise ZeroDivisionError("not a MailSourceError")
                 return self.inner.fetch(message_id)
 
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.runtime.mail_concurrency = 4
         with service.repository() as repo:
             pipeline = service._pipeline(repo)
@@ -367,7 +367,7 @@ class TestProviderTransparency:
         assert result.providers["extractor"] == "mock-extractor"
 
     def test_classifier_is_named_when_one_runs(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.app.classification.mode = "observe"
         result = service.sync_promotions(mode="jev-observe")
         assert result.providers["classifier"] == "mock-classifier"

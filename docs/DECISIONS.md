@@ -24,7 +24,7 @@ framework add?
 | Retrievers / vector stores | No | Nothing is retrieved. Emails arrive from Gmail by query; there is no semantic search step. |
 | Memory | No | State lives in versioned JSON files on disk, because it has to survive restarts. See §5. |
 | Output parsers | No | `response_format` with a Pydantic model already does this natively, and we re-validate afterwards regardless. |
-| Prompt templates | No | Two prompts, in `src/mealdeals/prompts/`, versioned as files and shipped with the package.  |
+| Prompt templates | No | Two prompts, in `src/weekly_deals/prompts/`, versioned as files and shipped with the package.  |
 | Callbacks / tracing | No | Every call is recorded in the `model_calls` table with provider, model, tokens, latency and retry count. That is the trace, and it is queryable with SQL. |
 
 What actually protects the user in this codebase is not in the model layer at
@@ -41,7 +41,7 @@ large transitive tree into the path that reads a person's mailbox, and pinning
 it for a project whose security story is "small and auditable".
 
 **The abstraction is already here, and it is smaller.** `models/base.py` defines
-two protocols, `FoodClassifier` and `OfferExtractor`. Swapping providers means
+two protocols, `PromotionClassifier` and `OfferExtractor`. Swapping providers means
 writing one class. `models/compatible_extractor.py` is the proof — a second
 backend in ~200 lines, with its own contract tests.
 
@@ -74,13 +74,13 @@ than bundling a platform. `models/wire.py` currently does this by hand in about
 **Not on the way in. On the way out.** The original plan had this the wrong way
 round, and the correction is the main architectural change in this version.
 
-### Inbound (MealDeals → Gmail via an MCP server): no
+### Inbound (Weekly Deals → Gmail via an MCP server): no
 
 Consider what sits between the application and Gmail in each case:
 
 ```
-Direct:   MealDeals → google-api-python-client → Gmail REST
-Via MCP:  MealDeals → MCP client → MCP server process → google-api-python-client → Gmail REST
+Direct:   Weekly Deals → google-api-python-client → Gmail REST
+Via MCP:  Weekly Deals → MCP client → MCP server process → google-api-python-client → Gmail REST
 ```
 
 The extra hop buys nothing — it is the same API underneath — and it weakens the
@@ -105,16 +105,16 @@ acceptance checklist. It is worth implementing only when someone already runs a
 qualified MCP mail server and wants to reuse it — and only after every check
 passes.
 
-### Outbound (an MCP host → MealDeals): yes
+### Outbound (an MCP host → Weekly Deals): yes
 
-This is the trade that pays. `mcp_server.py` exposes MealDeals' four business
+This is the trade that pays. `mcp_server.py` exposes Weekly Deals' four business
 capabilities over MCP:
 
 ```
 Claude / IDE / any agent host
   → MCP client
-  → mealdeals mcp        (this project)
-  → MealDealsService     (the same core the CLI uses)
+  → weekly-deals mcp        (this project)
+  → WeeklyDealsService     (the same core the CLI uses)
 ```
 
 What this buys, for about 200 lines:
@@ -124,7 +124,7 @@ What this buys, for about 200 lines:
   arguments, typed errors and a discoverable tool list instead of screen
   scraping.
 - **One core, no drift.** Both the CLI and the MCP server call
-  `MealDealsService`. There is no second definition of "this week's offers", and
+  `WeeklyDealsService`. There is no second definition of "this week's offers", and
   no second copy of the business rules living in a prompt.
 - **An enforceable boundary.** The host gets exactly seven tools. It can read
   and plan; the only write is the user's own offer state. It cannot pass a file

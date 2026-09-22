@@ -1,6 +1,6 @@
 """Typer CLI.
 
-Every command here is a thin wrapper over :mod:`mealdeals.service`. The CLI
+Every command here is a thin wrapper over :mod:`weekly_deals.service`. The CLI
 formats; it does not decide. The same is true of the web app and the MCP server,
 so the three can never drift apart.
 """
@@ -20,10 +20,10 @@ from .planning.explanations import explain_all
 from .promotions.render import render_calendar
 from .reporting import render as reporting
 from .schemas import UserStatus
-from .service import MealDealsService
+from .service import WeeklyDealsService
 
 app = typer.Typer(
-    name="mealdeals",
+    name="weekly-deals",
     help="Turn promotional email into a local weekly savings plan.",
     no_args_is_help=True,
     add_completion=False,
@@ -36,9 +36,9 @@ _warn = typer.style("warning", fg=typer.colors.YELLOW, bold=True)
 _ok = typer.style("ok", fg=typer.colors.GREEN, bold=True)
 
 
-def _service(config: str | None, offline: bool) -> MealDealsService:
+def _service(config: str | None, offline: bool) -> WeeklyDealsService:
     settings = Settings.build(config, offline=offline)
-    return MealDealsService(settings, SystemClock(settings.app.report.timezone))
+    return WeeklyDealsService(settings, SystemClock(settings.app.report.timezone))
 
 
 def _print_scan(result, language: str) -> None:
@@ -85,7 +85,7 @@ def demo(
         max_dining_out_per_week=3,
         party_size=2,
     )
-    service = MealDealsService.offline(preferences=demo_preferences)
+    service = WeeklyDealsService.offline(preferences=demo_preferences)
     result = service.sync_promotions(mode="llm-only")
     plan = service.build_meal_plan()
     offers = service.list_food_offers()
@@ -202,7 +202,7 @@ def auth_gmail(
 
     typer.echo(f"requesting scope: {SCOPES[0]}")
     typer.echo("this grants read access to your mailbox at the OAuth layer;")
-    typer.echo("MealDeals limits what it reads with its own queries.")
+    typer.echo("Weekly Deals limits what it reads with its own queries.")
     token_path = settings.data_dir / "gmail_token.json"
     build_credentials(secret, token_path)
     typer.echo(f"{_ok} token stored at {token_path} (mode 0600)")
@@ -252,7 +252,7 @@ def scan(
             typer.echo(f"  - {problem}")
         raise typer.Exit(2)
 
-    service = MealDealsService(settings, SystemClock(settings.app.report.timezone))
+    service = WeeklyDealsService(settings, SystemClock(settings.app.report.timezone))
     result = service.sync_promotions(mode=mode, max_messages=max_messages)
     _print_scan(result, settings.app.report.language)
 
@@ -271,7 +271,7 @@ def report(
     if not offers:
         typer.echo(
             f"{_warn} no offers stored yet. This is not the same as 'no offers exist' -- "
-            "run `mealdeals scan` first."
+            "run `weekly-deals scan` first."
         )
     reporting.render_to_file(
         plan, offers, output, format, language=service.settings.app.report.language
@@ -351,7 +351,7 @@ def savings(
 
 @app.command("mark")
 def mark(
-    offer_id: Annotated[str, typer.Argument(help="Offer id from `mealdeals offers`.")],
+    offer_id: Annotated[str, typer.Argument(help="Offer id from `weekly-deals offers`.")],
     status: Annotated[str, typer.Option(help="used | dismissed | saved | planned")] = "used",
     date: Annotated[str | None, typer.Option(help="Planned date, YYYY-MM-DD.")] = None,
     note: Annotated[str | None, typer.Option()] = None,
@@ -406,7 +406,7 @@ def pending(
 ) -> None:
     """Emit stored messages awaiting extraction, as JSON, with their text.
 
-    For a host that reads the mailbox itself -- see `skills/mealdeals/SKILL.md`.
+    For a host that reads the mailbox itself -- see `skills/weekly-deals/SKILL.md`.
     Extract against the `normalized_text` printed here and nothing else: it is
     the text the validator checks evidence quotes against.
     """
@@ -482,7 +482,7 @@ def serve(
     from .web.app import create_app
 
     settings = Settings.build(config, offline=offline)
-    service = MealDealsService(settings, SystemClock(settings.app.report.timezone))
+    service = WeeklyDealsService(settings, SystemClock(settings.app.report.timezone))
     typer.echo(f"serving on http://{host}:{port}  (local only)")
     uvicorn.run(create_app(service), host=host, port=port, log_level="info")
 
@@ -492,10 +492,10 @@ def mcp(
     config: Annotated[str | None, typer.Option()] = None,
     offline: Annotated[bool, typer.Option()] = False,
 ) -> None:
-    """Expose MealDeals to an MCP host over stdio.
+    """Expose Weekly Deals to an MCP host over stdio.
 
     This is the direction in which MCP is worth using here: other agents call
-    MealDeals, rather than MealDeals calling a mail server through MCP.
+    Weekly Deals, rather than Weekly Deals calling a mail server through MCP.
     """
     from .mcp_server import run_stdio
 

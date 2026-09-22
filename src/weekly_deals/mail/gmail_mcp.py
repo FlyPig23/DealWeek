@@ -13,7 +13,7 @@ three things this pipeline depends on *less* certain:
 
 MCP earns its place where a *host* needs to call capabilities it did not compile
 in. That is the outbound direction, and this project takes it: see
-``mealdeals.mcp_server``, which exposes MealDeals itself over MCP so Claude,
+``weekly_deals.mcp_server``, which exposes Weekly Deals itself over MCP so Claude,
 an IDE or any other host can use it without a bespoke integration.
 
 This module therefore stays a contract plus an acceptance checklist. Implement

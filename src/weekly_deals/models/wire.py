@@ -1,6 +1,6 @@
 """The schema the language model actually sees.
 
-Deliberately flatter than :mod:`mealdeals.schemas`. Structured-output modes
+Deliberately flatter than :mod:`weekly_deals.schemas`. Structured-output modes
 behave far better on shallow objects with explicit nulls than on deep trees with
 defaults, and keeping the two apart means the internal contract can evolve
 without rewriting the prompt.

@@ -112,7 +112,7 @@ class JsonStore:
         """
         if from_version > SCHEMA_VERSION:
             raise RuntimeError(
-                f"this store was written by a newer MealDeals (schema {from_version}); "
+                f"this store was written by a newer Weekly Deals (schema {from_version}); "
                 f"this build understands {SCHEMA_VERSION}. Upgrade rather than "
                 "downgrade, so your offer state is not rewritten by older rules."
             )

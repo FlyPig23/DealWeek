@@ -14,7 +14,7 @@ message". In Apple Mail or Outlook, drag the message to a folder.
 
 Usage::
 
-    mealdeals scan --mail-dir ~/Desktop/test-emails --mode llm-only --offline
+    weekly-deals scan --mail-dir ~/Desktop/test-emails --mode llm-only --offline
 
 With ``--offline`` (or ``LLM_PROVIDER=mock``) nothing leaves the machine at all,
 so this is also the safe way to check the parser against mail you would rather

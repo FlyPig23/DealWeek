@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from .schemas import Channel, Preferences
@@ -163,20 +163,34 @@ class Secrets(BaseSettings):
     llm_base_url: str | None = None
 
     mail_provider: Literal["fixtures", "eml_dir", "gmail_api", "gmail_mcp"] | None = None
-    mealdeals_eml_dir: str | None = None
+    weekly_deals_eml_dir: str | None = Field(
+        default=None, validation_alias=AliasChoices("weekly_deals_eml_dir", "mealdeals_eml_dir")
+    )
     gmail_client_secret_path: str | None = None
 
-    mealdeals_data_dir: str | None = None
-    mealdeals_timezone: str | None = None
-    mealdeals_language: str | None = None
+    # New names take priority; existing .env files remain usable after an upgrade.
+    weekly_deals_data_dir: str | None = Field(
+        default=None, validation_alias=AliasChoices("weekly_deals_data_dir", "mealdeals_data_dir")
+    )
+    weekly_deals_timezone: str | None = Field(
+        default=None, validation_alias=AliasChoices("weekly_deals_timezone", "mealdeals_timezone")
+    )
+    weekly_deals_language: str | None = Field(
+        default=None, validation_alias=AliasChoices("weekly_deals_language", "mealdeals_language")
+    )
 
     @property
     def data_dir(self) -> Path:
-        if self.mealdeals_data_dir:
-            return Path(self.mealdeals_data_dir).expanduser()
+        if self.weekly_deals_data_dir:
+            return Path(self.weekly_deals_data_dir).expanduser()
         base = os.environ.get("XDG_DATA_HOME")
         root = Path(base).expanduser() if base else Path.home() / ".local" / "share"
-        return root / "mealdeals"
+        current = root / "weekly-deals"
+        legacy = root / "mealdeals"
+        # Reuse stored mail, decisions and OAuth tokens without moving private data.
+        if not current.exists() and legacy.is_dir():
+            return legacy
+        return current
 
     def has_jev(self) -> bool:
         return self.typesafe_api_key is not None and bool(
@@ -217,15 +231,15 @@ class Settings(BaseModel):
         # Environment wins over the config file for these three.
         if secrets.mail_provider:
             app.mail.provider = secrets.mail_provider
-        if secrets.mealdeals_eml_dir:
-            app.mail.eml_dir = secrets.mealdeals_eml_dir
+        if secrets.weekly_deals_eml_dir:
+            app.mail.eml_dir = secrets.weekly_deals_eml_dir
             app.mail.provider = "eml_dir"
-        if secrets.mealdeals_timezone:
-            app.report.timezone = secrets.mealdeals_timezone
-            app.preferences.timezone = secrets.mealdeals_timezone
-        if secrets.mealdeals_language:
-            app.report.language = secrets.mealdeals_language
-            app.preferences.display_language = secrets.mealdeals_language
+        if secrets.weekly_deals_timezone:
+            app.report.timezone = secrets.weekly_deals_timezone
+            app.preferences.timezone = secrets.weekly_deals_timezone
+        if secrets.weekly_deals_language:
+            app.report.language = secrets.weekly_deals_language
+            app.preferences.display_language = secrets.weekly_deals_language
 
         for dotted, value in (overrides or {}).items():
             if value is None:
@@ -317,6 +331,6 @@ class Settings(BaseModel):
             problems.append("GMAIL_CLIENT_SECRET_PATH is not set for the gmail_api provider.")
         if self.app.mail.provider == "eml_dir" and not self.app.mail.eml_dir:
             problems.append(
-                "mail.provider=eml_dir needs mail.eml_dir (or MEALDEALS_EML_DIR / --mail-dir)."
+                "mail.provider=eml_dir needs mail.eml_dir (or WEEKLY_DEALS_EML_DIR / --mail-dir)."
             )
         return problems

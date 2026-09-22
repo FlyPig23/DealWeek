@@ -34,7 +34,11 @@ argument can grant it — including for an agent acting on your behalf.
 
 ## What is stored locally
 
-In `$XDG_DATA_HOME/mealdeals` (or `MEALDEALS_DATA_DIR`), mode `0700`:
+In `$XDG_DATA_HOME/weekly-deals` (or `WEEKLY_DEALS_DATA_DIR`), mode `0700`:
+
+Upgrades also accept the old `MEALDEALS_DATA_DIR` setting and reuse an existing
+`mealdeals` data directory if the new directory has not been created. The
+rename does not copy or move stored mail or OAuth tokens.
 
 | Table | Contents |
 | --- | --- |

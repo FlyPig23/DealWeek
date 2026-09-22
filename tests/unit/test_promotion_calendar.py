@@ -1,9 +1,9 @@
 from datetime import UTC, date, datetime
 
-from mealdeals.promotions.calendar import build_promotion_event
-from mealdeals.promotions.render import render_calendar
-from mealdeals.schemas import NormalizedEmail
-from mealdeals.service import MealDealsService
+from weekly_deals.promotions.calendar import build_promotion_event
+from weekly_deals.promotions.render import render_calendar
+from weekly_deals.schemas import NormalizedEmail
+from weekly_deals.service import WeeklyDealsService
 
 
 def test_calendar_extracts_explicit_expiry_and_food_category() -> None:
@@ -45,7 +45,7 @@ def test_calendar_keeps_unknown_dates_and_marks_visuals_for_review() -> None:
 
 
 def test_offline_scan_indexes_all_messages_for_savings_calendar() -> None:
-    service = MealDealsService.offline()
+    service = WeeklyDealsService.offline()
 
     result = service.sync_promotions(mode="llm-only")
 

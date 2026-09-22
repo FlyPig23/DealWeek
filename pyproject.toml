@@ -3,12 +3,12 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mealdeals"
+name = "weekly-deals"
 version = "0.1.0"
-description = "MealDeals: a local-first assistant that turns promotional email into a checkable weekly savings plan"
+description = "Weekly Deals: a local-first assistant that turns promotional email into a checkable weekly savings plan"
 readme = "README.md"
 requires-python = ">=3.11"
-authors = [{ name = "MealDeals Authors" }]
+authors = [{ name = "Weekly Deals Authors" }]
 license = { text = "MIT" }
 keywords = ["gmail", "offers", "llm", "local-first"]
 
@@ -41,11 +41,11 @@ gmail = [
 llm = ["openai>=1.30.0"]
 # Local web UI.
 web = ["fastapi>=0.111.0", "uvicorn>=0.30.0"]
-# Expose MealDeals to MCP hosts (see docs/DECISIONS.md).
+# Expose Weekly Deals to MCP hosts (see docs/DECISIONS.md).
 # Both SDK majors work: mcp_server._server_class() handles the
 # FastMCP -> MCPServer rename in 2.0.
 mcp = ["mcp>=1.2"]
-all = ["mealdeals[gmail,llm,web,mcp]"]
+all = ["weekly-deals[gmail,llm,web,mcp]"]
 dev = [
     "pytest>=8.2.0",
     "pytest-asyncio>=0.23.0",
@@ -59,10 +59,10 @@ dev = [
 # from the path that sees email text.
 
 [project.scripts]
-mealdeals = "mealdeals.cli:main"
+weekly-deals = "weekly_deals.cli:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/mealdeals"]
+packages = ["src/weekly_deals"]
 
 [tool.ruff]
 line-length = 100
@@ -87,4 +87,4 @@ ignore = [
 testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
-filterwarnings = ["error::DeprecationWarning:mealdeals.*"]
+filterwarnings = ["error::DeprecationWarning:weekly_deals.*"]

@@ -15,10 +15,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from mealdeals.models.compatible_extractor import CompatibleExtractor, extract_json
-from mealdeals.models.mock import MockExtractor
-from mealdeals.models.wire import WireOffer, to_draft
-from mealdeals.schemas import BenefitKind, ExtractionStatus, TriState
+from weekly_deals.models.compatible_extractor import CompatibleExtractor, extract_json
+from weekly_deals.models.mock import MockExtractor
+from weekly_deals.models.wire import WireOffer, to_draft
+from weekly_deals.schemas import BenefitKind, ExtractionStatus, TriState
 
 from ..conftest import make_email
 

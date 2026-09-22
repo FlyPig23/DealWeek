@@ -1,7 +1,7 @@
 # DealWeek
 
-The public project is called **DealWeek**. The `mealdeals` Python package,
-CLI, and skill name are kept for compatibility with existing local installs.
+**Weekly Deals** is the savings assistant in DealWeek. Its command and skill
+are named `weekly-deals`; its Python package is `weekly_deals`.
 
 Turns promotional email into a weekly savings plan you can check: which offers
 are usable this week, which expire soon, and which still need confirmation —
@@ -12,13 +12,20 @@ Local-first, single user, Gmail read-only. Runs offline on synthetic data with
 no API keys at all.
 
 ```bash
-pip install -e .
-mealdeals demo --output ./demo-report.html
+git clone https://github.com/FlyPig23/DealWeek.git
+cd DealWeek
+python3 -m venv .venv
+source .venv/bin/activate
+pip install .
+weekly_deals_demo_dir="$(mktemp -d)"
+WEEKLY_DEALS_DATA_DIR="$weekly_deals_demo_dir" weekly-deals scan --offline --mode llm-only
+WEEKLY_DEALS_DATA_DIR="$weekly_deals_demo_dir" weekly-deals calendar --output ./savings-calendar.html
 ```
 
-That runs the whole pipeline — fetch, classify, extract, validate, deduplicate,
-plan, render — against a synthetic corpus, with no network access and no
-credentials. Every merchant in it is invented.
+Open `savings-calendar.html` in your browser. This example scans synthetic
+messages in an isolated temporary data directory and builds the calendar
+without network access or credentials.
+Every merchant in it is invented.
 
 ---
 
@@ -54,34 +61,65 @@ pip install -e .                 # core: offline demo, planner, reports
 pip install -e ".[gmail]"        # + read-only Gmail access
 pip install -e ".[llm]"          # + OpenAI-compatible extraction
 pip install -e ".[web]"          # + local web UI
-pip install -e ".[mcp]"          # + expose MealDeals to MCP hosts
+pip install -e ".[mcp]"          # + expose Weekly Deals to MCP hosts
 pip install -e ".[all,dev]"      # everything, plus tests
 ```
 
 Requires Python 3.11+.
 
+### Install the skill
+
+After installing the application, copy the skill into your agent's skill folder:
+
+```bash
+# Codex
+mkdir -p ~/.codex/skills
+cp -R skills/weekly-deals ~/.codex/skills/
+
+# Or Claude Code
+mkdir -p ~/.claude/skills
+cp -R skills/weekly-deals ~/.claude/skills/
+```
+
+Start a new turn/session and ask the agent to use `weekly-deals`. If the agent
+already has read access to Gmail, no separate Gmail OAuth setup is needed.
+
+### Upgrading from MealDeals
+
+Reinstall the application and replace the old `mealdeals` skill folder with
+`skills/weekly-deals`. Update scripts and MCP configurations to call
+`weekly-deals`, and Python imports to use `weekly_deals`.
+
+The environment prefix is now `WEEKLY_DEALS_`. Existing `MEALDEALS_DATA_DIR`,
+`MEALDEALS_EML_DIR`, `MEALDEALS_TIMEZONE`, and `MEALDEALS_LANGUAGE` still work;
+the corresponding new name takes priority when both are supplied.
+New installations use `~/.local/share/weekly-deals` (or the equivalent under
+`XDG_DATA_HOME`). If that directory does not exist but the old `mealdeals`
+data directory does, it is reused so saved mail, decisions and OAuth tokens
+remain available. No private data is moved automatically.
+
 ## Commands
 
 ```bash
-mealdeals demo                   # offline, synthetic, no keys
-mealdeals doctor                 # check configuration
-mealdeals doctor --check-apis    # send one synthetic probe per provider
-mealdeals auth gmail             # read-only OAuth, token stored locally
+weekly-deals demo                   # offline, synthetic, no keys
+weekly-deals doctor                 # check configuration
+weekly-deals doctor --check-apis    # send one synthetic probe per provider
+weekly-deals auth gmail             # read-only OAuth, token stored locally
 
-mealdeals scan --mail-dir ~/Desktop/test-emails --offline   # real files, no keys
-mealdeals scan --mode llm-only --max-messages 30
-mealdeals scan --mode jev-observe --lookback-days 90
-mealdeals scan --mode jev-gate           # only after an evaluation is recorded
+weekly-deals scan --mail-dir ~/Desktop/test-emails --offline   # real files, no keys
+weekly-deals scan --mode llm-only --max-messages 30
+weekly-deals scan --mode jev-observe --lookback-days 90
+weekly-deals scan --mode jev-gate           # only after an evaluation is recorded
 
-mealdeals plan                   # show the plan in the terminal
-mealdeals offers                 # list stored offers and their state
-mealdeals calendar               # write ./savings-calendar.html
-mealdeals calendar --json        # print machine-readable events
-mealdeals savings                # same HTML calendar under another command name
-mealdeals mark <offer-id> --status used
-mealdeals report --format html --output ./report.html
-mealdeals serve                  # local web UI on 127.0.0.1
-mealdeals mcp                    # MCP server over stdio
+weekly-deals plan                   # show the plan in the terminal
+weekly-deals offers                 # list stored offers and their state
+weekly-deals calendar               # write ./savings-calendar.html
+weekly-deals calendar --json        # print machine-readable events
+weekly-deals savings                # same HTML calendar under another command name
+weekly-deals mark <offer-id> --status used
+weekly-deals report --format html --output ./report.html
+weekly-deals serve                  # local web UI on 127.0.0.1
+weekly-deals mcp                    # MCP server over stdio
 ```
 
 ## First real run
@@ -89,7 +127,7 @@ mealdeals mcp                    # MCP server over stdio
 The order matters, and each step is cheap to undo. Steps 1-2 need no account,
 no key and no network.
 
-1. `mealdeals demo` — confirm the pipeline works end to end on synthetic mail.
+1. `weekly-deals demo` — confirm the pipeline works end to end on synthetic mail.
 
 2. **Test on real email without giving anything away.** Export a dozen
    promotional messages from your mail client (in Gmail: open a message → the
@@ -97,9 +135,9 @@ no key and no network.
    then:
 
    ```bash
-   mealdeals scan --mail-dir ~/Desktop/test-emails --offline
-   mealdeals plan --offline
-   mealdeals calendar --offline
+   weekly-deals scan --mail-dir ~/Desktop/test-emails --offline
+   weekly-deals plan --offline
+   weekly-deals calendar --offline
    ```
 
    This runs the whole pipeline over real vendor HTML, real nested MIME, real
@@ -109,9 +147,9 @@ no key and no network.
    Check the parsed dates, amounts and conditions against the originals before
    going further.
 
-3. `mealdeals doctor --check-apis` — confirm your keys and model names, using
+3. `weekly-deals doctor --check-apis` — confirm your keys and model names, using
    synthetic text only. Your mailbox is not touched.
-4. `mealdeals auth gmail` — read-only authorisation.
+4. `weekly-deals auth gmail` — read-only authorisation.
 5. Set `privacy.cloud_processing_consent: true` in `config.yaml`. Authorising
    Gmail reads and agreeing to send email text to a cloud model are two separate
    decisions, and the application will not do the second without this. It covers
@@ -122,12 +160,12 @@ no key and no network.
    `llm_price_input_usd_per_mtok` and `llm_price_output_usd_per_mtok` for your
    model. A cap can only be applied to spend that can be measured, so a run with
    a cap and no prices refuses to start rather than pretending to be capped.
-6. `mealdeals scan --mode llm-only --max-messages 30` — a small batch. Read the
+6. `weekly-deals scan --mode llm-only --max-messages 30` — a small batch. Read the
    output and check it against the real emails. The default Gmail query is
    `category:promotions`, so archived Promotions mail is included; the app does
    not restrict this step to `in:inbox`.
 7. Fix whatever is wrong, add a test for it, then widen to 90 days.
-8. `mealdeals scan --mode jev-observe` — the classifier runs but discards
+8. `weekly-deals scan --mode jev-observe` — the classifier runs but discards
    nothing, so you can measure what it would have filtered.
 9. Only once you have an evaluation record showing acceptable recall, switch to
    `jev-gate`.
@@ -139,19 +177,19 @@ at the same time.
 
 **Agent-host mode (recommended for Codex or Claude Code).** The host already
 has a Gmail connector, so the user authorises the host to read the mailbox and
-asks it to use the MealDeals skill. No Google Cloud OAuth client, Gmail token,
-JEV key, or LLM key is required for this path. The host hands MealDeals the
-messages it fetched, and MealDeals performs local normalisation, validation,
+asks it to use the Weekly Deals skill. No Google Cloud OAuth client, Gmail token,
+JEV key, or LLM key is required for this path. The host hands Weekly Deals the
+messages it fetched, and Weekly Deals performs local normalisation, validation,
 calendar generation, and reporting. The host must preserve the message body and
 must not modify the mailbox.
 
 For example, ask the host:
 
-> Use the MealDeals skill to read my last 90 days of Gmail Promotions and
+> Use the Weekly Deals skill to read my last 90 days of Gmail Promotions and
 > generate the weekly savings calendar. Read only; do not send, archive, label,
 > or delete anything.
 
-**Self-hosted Gmail API mode.** Use this when MealDeals itself should access
+**Self-hosted Gmail API mode.** Use this when Weekly Deals itself should access
 Gmail from a terminal or server:
 
 ~~~bash
@@ -159,9 +197,9 @@ cp .env.example .env
 # edit .env:
 #   MAIL_PROVIDER=gmail_api
 #   GMAIL_CLIENT_SECRET_PATH=/absolute/path/client_secret.json
-./.venv/bin/mealdeals auth gmail
-./.venv/bin/mealdeals scan --mode llm-only
-./.venv/bin/mealdeals calendar
+./.venv/bin/weekly-deals auth gmail
+./.venv/bin/weekly-deals scan --mode llm-only
+./.venv/bin/weekly-deals calendar
 ~~~
 
 For a completely local run, set classification.mode: off in config.yaml and
@@ -178,7 +216,7 @@ JEV_MODEL=jev-latest, and explicitly set privacy.cloud_processing_consent: true.
 Subjects and normalised bodies sent to JEV leave the machine; the key is never
 committed to the repository.
 
-### If the command says `No module named 'mealdeals'`
+### If the command says `No module named 'weekly_deals'`
 
 On macOS with iCloud Drive's "Desktop & Documents" sync enabled, iCloud sets the
 hidden flag on files it treats as internal — including the `.pth` file an
@@ -190,11 +228,11 @@ Clearing the flag by hand does not hold — iCloud sets it again within minutes.
 Keep the virtualenv outside the synced folders instead:
 
 ```bash
-python3 -m venv ~/.venvs/mealdeals
-~/.venvs/mealdeals/bin/pip install "/path/to/mealdeals[gmail,llm,web]"
+python3 -m venv ~/.venvs/weekly-deals
+~/.venvs/weekly-deals/bin/pip install "/path/to/DealWeek[gmail,llm,web]"
 # ...then link it somewhere already on your PATH. Check first:
 #   echo $PATH | tr ':' '\n' | grep -E 'local/bin|homebrew/bin'
-ln -sf ~/.venvs/mealdeals/bin/mealdeals /opt/homebrew/bin/mealdeals
+ln -sf ~/.venvs/weekly-deals/bin/weekly-deals /opt/homebrew/bin/weekly-deals
 ```
 
 `~/.local/bin` is the conventional target, but it is **not** on the default macOS
@@ -204,8 +242,8 @@ is.
 A non-editable install puts real files in `site-packages` and needs no `.pth` at
 all, so it is immune regardless.
 
-The same applies to your data: keep `MEALDEALS_DATA_DIR` off the Desktop and out
-of Documents. The default (`~/.local/share/mealdeals`) is already outside them —
+The same applies to your data: keep `WEEKLY_DEALS_DATA_DIR` off the Desktop and out
+of Documents. The default (`~/.local/share/weekly-deals`) is already outside them —
 pointing it at a synced folder would upload your email text to iCloud.
 
 ## Configuration
@@ -241,7 +279,7 @@ a database.
 ## For agent hosts
 
 ```bash
-mealdeals mcp
+weekly-deals mcp
 ```
 
 Exposes seven tools: `get_status`, `sync_promotions`, `list_food_offers`,
@@ -258,7 +296,7 @@ Example, for a client that launches servers over stdio:
 ```json
 {
   "mcpServers": {
-    "mealdeals": { "command": "mealdeals", "args": ["mcp"] }
+    "weekly-deals": { "command": "weekly-deals", "args": ["mcp"] }
   }
 }
 ```
@@ -303,7 +341,7 @@ rather than hidden:
 
 ## Your data
 
-Everything lives in one directory — `$MEALDEALS_DATA_DIR`, or the platform
+Everything lives in one directory — `$WEEKLY_DEALS_DATA_DIR`, or the platform
 default — as plain JSON:
 
 ```

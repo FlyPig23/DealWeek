@@ -10,10 +10,10 @@ import datetime as dt
 
 import pytest
 
-from mealdeals.clock import FrozenClock
-from mealdeals.mail.fixtures import FixtureMailSource
-from mealdeals.models.mock import MockClassifier, MockExtractor
-from mealdeals.schemas import (
+from weekly_deals.clock import FrozenClock
+from weekly_deals.mail.fixtures import FixtureMailSource
+from weekly_deals.models.mock import MockClassifier, MockExtractor
+from weekly_deals.schemas import (
     Benefit,
     BenefitKind,
     DateConfidence,
@@ -27,7 +27,7 @@ from mealdeals.schemas import (
     TemporalPoint,
     TemporalRules,
 )
-from mealdeals.service import MealDealsService
+from weekly_deals.service import WeeklyDealsService
 
 # A Wednesday, so "this week" has days on both sides of it.
 REFERENCE = dt.datetime(2026, 9, 16, 9, 0)
@@ -64,8 +64,8 @@ def preferences() -> Preferences:
 
 
 @pytest.fixture
-def service(clock: FrozenClock) -> MealDealsService:
-    return MealDealsService.offline(clock=clock)
+def service(clock: FrozenClock) -> WeeklyDealsService:
+    return WeeklyDealsService.offline(clock=clock)
 
 
 def make_email(text: str, *, source_id: str = "m1", **kwargs) -> NormalizedEmail:
@@ -104,7 +104,7 @@ def make_draft(
     eligibility: Eligibility | None = None,
     message_id: str = "m1",
 ) -> OfferDraft:
-    from mealdeals.schemas import TriState
+    from weekly_deals.schemas import TriState
 
     return OfferDraft(
         merchant=merchant,

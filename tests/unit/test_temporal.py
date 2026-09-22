@@ -10,9 +10,9 @@ import datetime as dt
 
 import pytest
 
-from mealdeals.clock import FrozenClock, month_bounds, week_bounds
-from mealdeals.offers import temporal
-from mealdeals.schemas import (
+from weekly_deals.clock import FrozenClock, month_bounds, week_bounds
+from weekly_deals.offers import temporal
+from weekly_deals.schemas import (
     DateConfidence,
     TemporalPoint,
     TemporalRules,

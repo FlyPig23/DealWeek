@@ -1,11 +1,11 @@
 ---
-name: mealdeals
-description: Turn the user's promotional email into a checkable savings plan - what expires soon, what is still usable, what needs confirmation, and which category it belongs to. Use when the user asks about promotions, coupons, discounts, meal deals, shopping offers, travel deals, or other savings in their inbox. Works either against a MealDeals install that reads their mailbox itself, or by reading the mail yourself and handing it over.
+name: weekly-deals
+description: Turn the user's promotional email into a checkable savings plan - what expires soon, what is still usable, what needs confirmation, and which category it belongs to. Use when the user asks about promotions, coupons, discounts, meal deals, shopping offers, travel deals, or other savings in their inbox. Works either against a Weekly Deals install that reads their mailbox itself, or by reading the mail yourself and handing it over.
 ---
 
-# MealDeals
+# Weekly Deals
 
-A thin entry point to a local MealDeals installation. The rules live in the
+A thin entry point to a local Weekly Deals installation. The rules live in the
 application; this file explains how to talk to it, and how to report what it
 says without undoing the care it took. Food is one category alongside shopping,
 travel, events, services, and other promotions.
@@ -13,10 +13,10 @@ travel, events, services, and other promotions.
 Check what you are working with first:
 
 ```bash
-mealdeals status
+weekly-deals status
 ```
 
-If that command does not exist, MealDeals is not installed — say so and stop.
+If that command does not exist, Weekly Deals is not installed — say so and stop.
 Do not attempt the work by hand: the point of this tool is the deterministic
 validation, and an answer assembled from reading the mail yourself has none of
 it.
@@ -31,19 +31,19 @@ it.
   validation without either key. Never ask for a key in chat.
 - `per_run_budget_usd` set with no prices configured — the user must set the
   per-token prices for their model, or set the budget to 0.
-- Gmail authorisation expired — tell them to run `mealdeals auth gmail`.
+- Gmail authorisation expired — tell them to run `weekly-deals auth gmail`.
 
 ---
 
 ## Which mode you are in
 
-**Mode A — MealDeals reads the mailbox.** `mail_provider` is `gmail_api` and
-`mealdeals auth gmail` has been run. It fetches, classifies and extracts on its
+**Mode A — Weekly Deals reads the mailbox.** `mail_provider` is `gmail_api` and
+`weekly-deals auth gmail` has been run. It fetches, classifies and extracts on its
 own. You only read results. Go to *Reading results*.
 
 **Mode B — you read the mailbox.** The user has no Gmail OAuth client of their
 own, but *you* can reach their mail (a Gmail connector, an MCP mail server). You
-fetch and extract; MealDeals normalises, classifies, validates, plans and
+fetch and extract; Weekly Deals normalises, classifies, validates, plans and
 renders. This needs no Google Cloud project from the user and no LLM key,
 because you are the extractor.
 
@@ -55,7 +55,7 @@ context.
 promotion question per message and can label the small category used in the
 calendar. The generic calendar is still indexed before this route, so a
 classifier outage does not make a matched Promotions message disappear.
-`mealdeals status` reports `jev_configured`.
+`weekly-deals status` reports `jev_configured`.
 
 ---
 
@@ -82,10 +82,10 @@ requirement — live in the small print at the bottom, and the validator later
 checks quotes against exactly this text. Text you improved is text whose quotes
 will not match.
 
-### 2. Let MealDeals normalise it
+### 2. Let Weekly Deals normalise it
 
 ```bash
-mealdeals scan --mail-dir <dir> --mode host-ingest
+weekly-deals scan --mail-dir <dir> --mode host-ingest
 ```
 
 `host-ingest` normalises, runs the classifier, and then stops — extraction is
@@ -107,7 +107,7 @@ mail that has not changed.
 ### 3. Read back the text to extract from
 
 ```bash
-mealdeals pending
+weekly-deals pending
 ```
 
 JSON, one entry per message, each with `normalized_text` plus `body_complete`,
@@ -122,7 +122,7 @@ rather than filling it in.
 
 ### 4. Extract
 
-Follow `src/mealdeals/prompts/extract_offers_v1.txt` — the same instructions the
+Follow `references/extract_offers_v1.txt` — the same instructions the
 application gives a model provider — and produce output matching
 `offer-draft.schema.json` in this directory. The rules that matter most:
 
@@ -148,7 +148,7 @@ it. Note it as a property of the email; it is worth telling the user about.
 Write `{"<message_id>": [<draft>, ...]}` to a file, then:
 
 ```bash
-mealdeals ingest --file <drafts.json>
+weekly-deals ingest --file <drafts.json>
 ```
 
 **Your output is not trusted, by design.** Every quote must be locatable
@@ -160,10 +160,10 @@ the user rather than quietly moving on.
 ### 6. Plan, calendar, and report
 
 ```bash
-mealdeals plan
-mealdeals report --format markdown --output <path>
-mealdeals calendar --output <path>
-mealdeals calendar --json --output <path>
+weekly-deals plan
+weekly-deals report --format markdown --output <path>
+weekly-deals calendar --output <path>
+weekly-deals calendar --json --output <path>
 ```
 
 `calendar` (also available as `savings`) lists every indexed Promotions message,
@@ -175,7 +175,7 @@ the same stored scan results as the meal plan.
 For the overall savings view, start with:
 
 ```bash
-mealdeals calendar
+weekly-deals calendar
 ```
 
 Treat `ending_soon` as a reminder rather than a guarantee that the merchant
@@ -200,13 +200,13 @@ Say this once, plainly, when you present the results. Do not bury it.
 ## Reading results
 
 ```bash
-mealdeals offers --json        # stored offers and their derived state
-mealdeals plan                 # this week / next week / month / to confirm
-mealdeals report --format markdown --output <path>
-mealdeals mark <offer-id> --status used|dismissed|saved|planned [--date YYYY-MM-DD]
+weekly-deals offers --json        # stored offers and their derived state
+weekly-deals plan                 # this week / next week / month / to confirm
+weekly-deals report --format markdown --output <path>
+weekly-deals mark <offer-id> --status used|dismissed|saved|planned [--date YYYY-MM-DD]
 ```
 
-These are free and offline. In Mode A, `mealdeals scan` calls paid APIs: only
+These are free and offline. In Mode A, `weekly-deals scan` calls paid APIs: only
 run it when the user asks for fresh data, tell them it costs money first, and
 keep `--max-messages` small unless they say otherwise.
 

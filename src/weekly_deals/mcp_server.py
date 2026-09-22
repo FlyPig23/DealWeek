@@ -1,4 +1,4 @@
-"""MealDeals as an MCP server.
+"""Weekly Deals as an MCP server.
 
 This is the MCP direction that earns its keep in this project.
 
@@ -7,7 +7,7 @@ the same Gmail REST API, while weakening the three guarantees the pipeline is
 built on: exhaustive pagination, complete bodies, and stable ids. See
 ``mail/gmail_mcp.py``.
 
-Using MCP to *expose MealDeals* is the opposite trade. Any host -- Claude, an
+Using MCP to *expose Weekly Deals* is the opposite trade. Any host -- Claude, an
 IDE, another agent -- gets the four business capabilities without a bespoke
 integration, and gets them through the same service layer the CLI uses, so the
 rules cannot drift. It also replaces the planned SKILL.md-shells-out-to-CLI
@@ -32,10 +32,10 @@ from .config import Settings
 from .planning.explanations import explain_all
 from .reporting import render as reporting
 from .schemas import UserStatus
-from .service import MealDealsService
+from .service import WeeklyDealsService
 
-SERVER_NAME = "mealdeals"
-SERVER_INSTRUCTIONS = """MealDeals turns promotional email into a checkable weekly savings plan.
+SERVER_NAME = "weekly-deals"
+SERVER_INSTRUCTIONS = """Weekly Deals turns promotional email into a checkable weekly savings plan.
 
 Offers carry explicit uncertainty. `time_status`, `eligibility_status` and
 `parse_status` are not decoration: an offer in `needs_confirmation` has not been
@@ -139,7 +139,7 @@ def _server_class():
         return FastMCP
     except ImportError as exc:  # pragma: no cover - optional dependency
         raise RuntimeError(
-            "the MCP server needs the 'mcp' package: pip install 'mealdeals[mcp]'"
+            "the MCP server needs the 'mcp' package: pip install 'weekly-deals[mcp]'"
         ) from exc
 
 
@@ -148,7 +148,7 @@ def build_server(config: str | None = None, offline: bool = False):
     server_class = _server_class()
 
     settings = Settings.build(config, offline=offline)
-    service = MealDealsService(settings, SystemClock(settings.app.report.timezone))
+    service = WeeklyDealsService(settings, SystemClock(settings.app.report.timezone))
     language = settings.app.report.language
 
     server = server_class(SERVER_NAME, instructions=SERVER_INSTRUCTIONS)

@@ -40,7 +40,7 @@ and fixture `fx-012` runs through the full pipeline on every demo.
   `0600` file, created with those permissions rather than relaxed afterwards.
 - Provider error responses are never echoed into logs: they can contain the
   email text that was sent.
-- `mealdeals status` and the MCP `get_status` tool are asserted by tests never to
+- `weekly-deals status` and the MCP `get_status` tool are asserted by tests never to
   return anything matching `api_key`, `token`, `secret`, `bearer` or `password`.
 
 ## Mailbox access
@@ -48,7 +48,7 @@ and fixture `fx-012` runs through the full pipeline on every demo.
 - The only scope requested is `https://www.googleapis.com/auth/gmail.readonly`.
 - **That scope grants read access to the entire mailbox at the OAuth layer.**
   The restriction to promotional mail is enforced by this application's queries.
-  Do not describe it to users as "MealDeals can only see promotions".
+  Do not describe it to users as "Weekly Deals can only see promotions".
 - No write scope, ever: no sending, no labelling, no deleting.
 - An OAuth app in Testing status expires refresh tokens after 7 days. That
   surfaces as `AuthRequired` ("re-authorise"), not as an empty offer list.
@@ -64,7 +64,7 @@ machine can issue requests to `127.0.0.1`. `web/app.py` therefore:
 - sends `Content-Security-Policy: default-src 'none'` with no image or script
   sources, `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`;
 - exposes no OpenAPI or docs endpoints;
-- refuses to bind to anything but loopback (`mealdeals serve` exits on a
+- refuses to bind to anything but loopback (`weekly-deals serve` exits on a
   non-loopback host).
 
 ## Rendering email content
@@ -78,7 +78,7 @@ Asserted by `tests/contract/test_pipeline.py::test_html_escapes_email_content_an
 
 ## MCP server boundary
 
-`mealdeals mcp` exposes seven tools. The limits are enforced in code and
+`weekly-deals mcp` exposes seven tools. The limits are enforced in code and
 asserted in `tests/contract/test_mcp_server.py`:
 
 - Read and plan freely; the only write is the user's own offer state.

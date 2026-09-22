@@ -13,10 +13,10 @@ import pytest
 
 pytest.importorskip("mcp", reason="the optional 'mcp' extra is not installed")
 
-from mealdeals.clock import FrozenClock
-from mealdeals.mcp_server import _offer_view, _plan_view, build_server
-from mealdeals.schemas import UserStatus
-from mealdeals.service import MealDealsService
+from weekly_deals.clock import FrozenClock
+from weekly_deals.mcp_server import _offer_view, _plan_view, build_server
+from weekly_deals.schemas import UserStatus
+from weekly_deals.service import WeeklyDealsService
 
 from ..conftest import REFERENCE
 
@@ -25,10 +25,10 @@ from ..conftest import REFERENCE
 def server(monkeypatch):
     """A server wired to an offline, in-memory service."""
     clock = FrozenClock(REFERENCE, "America/Chicago")
-    service = MealDealsService.offline(clock=clock)
+    service = WeeklyDealsService.offline(clock=clock)
     service.sync_promotions(mode="llm-only")
     monkeypatch.setattr(
-        "mealdeals.mcp_server.MealDealsService", lambda *a, **k: service
+        "weekly_deals.mcp_server.WeeklyDealsService", lambda *a, **k: service
     )
     built = build_server(offline=True)
     built._service = service  # type: ignore[attr-defined]
@@ -181,14 +181,14 @@ class TestSpendBoundary:
     async def test_a_host_cannot_grant_itself_cloud_consent(self, monkeypatch):
         """Consent is a local decision. No tool argument can override it."""
         clock = FrozenClock(REFERENCE, "America/Chicago")
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.settings.offline = False
         service.settings.app.privacy.cloud_processing_consent = False
         monkeypatch.setattr(
-            "mealdeals.mcp_server.MealDealsService", lambda *a, **k: service
+            "weekly_deals.mcp_server.WeeklyDealsService", lambda *a, **k: service
         )
         monkeypatch.setattr(
-            "mealdeals.mcp_server.Settings.build", lambda *a, **k: service.settings
+            "weekly_deals.mcp_server.Settings.build", lambda *a, **k: service.settings
         )
         built = build_server()
         payload = await call(built, "sync_promotions")
@@ -197,7 +197,7 @@ class TestSpendBoundary:
 
 class TestViews:
     def test_offer_view_distinguishes_absent_from_unknown_deadline(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.sync_promotions(mode="llm-only")
         views = [_offer_view(o) for o in service.list_food_offers()]
         undated = [v for v in views if v["ends"] is None]
@@ -205,7 +205,7 @@ class TestViews:
         assert all(v["ends_stated"] is False for v in undated)
 
     def test_plan_view_marks_uncomputable_costs(self, clock):
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.sync_promotions(mode="llm-only")
         view = _plan_view(service.build_meal_plan(), "zh-CN")
         every = (

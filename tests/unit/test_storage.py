@@ -10,9 +10,9 @@ import datetime as dt
 
 import pytest
 
-from mealdeals.offers.validate import validate
-from mealdeals.schemas import Coverage, OfferUserState, RunRecord, UserStatus
-from mealdeals.storage.database import open_store, repository_scope
+from weekly_deals.offers.validate import validate
+from weekly_deals.schemas import Coverage, OfferUserState, RunRecord, UserStatus
+from weekly_deals.storage.database import open_store, repository_scope
 
 from ..conftest import make_draft, make_email
 
@@ -130,7 +130,7 @@ class TestOfferVersioning:
 
 class TestCostAccounting:
     def test_missing_usage_marks_the_cost_unknown_not_zero(self, repo):
-        from mealdeals.schemas import ProviderMeta, Usage
+        from weekly_deals.schemas import ProviderMeta, Usage
 
         repo.start_run(
             RunRecord(
@@ -145,7 +145,7 @@ class TestCostAccounting:
         assert known is False
 
     def test_cached_calls_do_not_add_cost(self, repo):
-        from mealdeals.schemas import ProviderMeta, Usage
+        from weekly_deals.schemas import ProviderMeta, Usage
 
         repo.start_run(
             RunRecord(
@@ -184,9 +184,9 @@ class TestThreadSafety:
     def test_store_is_visible_from_another_thread(self, clock):
         import concurrent.futures
 
-        from mealdeals.service import MealDealsService
+        from weekly_deals.service import WeeklyDealsService
 
-        service = MealDealsService.offline(clock=clock)
+        service = WeeklyDealsService.offline(clock=clock)
         service.sync_promotions(mode="llm-only")
         expected = len(service.list_food_offers())
         assert expected > 0

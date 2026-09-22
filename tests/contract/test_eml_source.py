@@ -11,10 +11,10 @@ from email.header import Header
 
 import pytest
 
-from mealdeals.config import Settings
-from mealdeals.mail.base import MailSourceError
-from mealdeals.mail.eml_files import EmlDirectorySource
-from mealdeals.service import MealDealsService
+from weekly_deals.config import Settings
+from weekly_deals.mail.base import MailSourceError
+from weekly_deals.mail.eml_files import EmlDirectorySource
+from weekly_deals.service import WeeklyDealsService
 
 MESSAGE = """From: Noodle Lantern <offers@noodlelantern.example>
 To: you@example.com
@@ -129,16 +129,16 @@ class TestParsing:
 
 
 class TestEndToEnd:
-    def _service(self, maildir, clock) -> MealDealsService:
+    def _service(self, maildir, clock) -> WeeklyDealsService:
         settings = Settings.build(
             offline=False,  # not the fixture corpus -- these are real files
             overrides={"mail.provider": "eml_dir", "mail.eml_dir": str(maildir)},
         )
         settings.app.classification.mode = "off"
-        service = MealDealsService.__new__(MealDealsService)
+        service = WeeklyDealsService.__new__(WeeklyDealsService)
         service.settings = settings
         service.clock = clock
-        from mealdeals.storage.database import open_store
+        from weekly_deals.storage.database import open_store
 
         service._store = open_store(":memory:")
         return service

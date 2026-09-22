@@ -1,6 +1,6 @@
 """What the store holds on disk.
 
-These are the storage shapes, kept apart from :mod:`mealdeals.schemas`, which
+These are the storage shapes, kept apart from :mod:`weekly_deals.schemas`, which
 describes the domain. They are Pydantic models for one practical reason: a field
 added in a later version reads back as its default from a file written by an
 earlier one, so ordinary schema growth needs no migration step at all.

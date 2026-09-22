@@ -10,7 +10,7 @@ mailbox, and does not print your key or the full response.
 This proves the endpoint is reachable and the response has the expected shape.
 It proves nothing about classification accuracy -- for that, see `evals/`.
 
-The production client is `mealdeals.models.jev`, which adds retries, backoff,
+The production client is `weekly_deals.models.jev`, which adds retries, backoff,
 caching and usage accounting. Do not use this script as one.
 """
 

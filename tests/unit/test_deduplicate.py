@@ -8,9 +8,9 @@ from __future__ import annotations
 
 import datetime as dt
 
-from mealdeals.offers.deduplicate import deduplicate, merge_pair
-from mealdeals.offers.validate import validate
-from mealdeals.schemas import Channel, Eligibility
+from weekly_deals.offers.deduplicate import deduplicate, merge_pair
+from weekly_deals.offers.validate import validate
+from weekly_deals.schemas import Channel, Eligibility
 
 from ..conftest import make_draft, make_email
 

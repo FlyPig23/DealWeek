@@ -22,7 +22,7 @@ from .clock import Clock, SystemClock
 from .config import Settings
 from .mail.base import MailSource
 from .mail.fixtures import FixtureMailSource
-from .models.base import FoodClassifier, OfferExtractor
+from .models.base import OfferExtractor, PromotionClassifier
 from .models.mock import MockClassifier, MockExtractor
 from .offers import temporal
 from .pipeline import PipelineService, ScanResult
@@ -124,7 +124,7 @@ def build_extractor(settings: Settings) -> OfferExtractor:
     )
 
 
-def build_classifier(settings: Settings) -> FoodClassifier | None:
+def build_classifier(settings: Settings) -> PromotionClassifier | None:
     if settings.app.classification.mode == "off":
         return None
     if settings.offline or not settings.secrets.has_jev():
@@ -145,7 +145,7 @@ def build_classifier(settings: Settings) -> FoodClassifier | None:
     )
 
 
-class MealDealsService:
+class WeeklyDealsService:
     """One entry point for every front end."""
 
     def __init__(self, settings: Settings, clock: Clock | None = None) -> None:
@@ -159,7 +159,7 @@ class MealDealsService:
         clock: Clock | None = None,
         store_path: str | None = None,
         preferences: Preferences | None = None,
-    ) -> MealDealsService:
+    ) -> WeeklyDealsService:
         """Fully offline instance: fixtures, mock models, no network, no keys.
 
         Defaults to an in-memory database so a demo run leaves nothing behind
